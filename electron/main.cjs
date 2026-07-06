@@ -26,6 +26,7 @@ function registerIpc() {
     'workspace:info': () => ws.info(),
     'tree:get': () => ws.getTree(),
     'project:create': (e, name) => ws.createProject(name),
+    'project:export': (e, name) => ws.exportProject(name),
     'page:read': (e, rel) => ws.readPage(rel),
     'page:write': (e, rel, markdown) => ws.writePage(rel, markdown),
     'page:create': (e, project, phase, title, markdown) => ws.createPage(project, phase, title, markdown),
@@ -40,6 +41,22 @@ function registerIpc() {
     'archive:remove': (e, id) => ws.archiveRemove(id),
     'archive:open': (e, id) => ws.archiveOpen(id),
     'search:query': (e, q) => ws.search(q),
+    'settings:get': () => ws.getSettings(),
+    'settings:set': (e, patch) => ws.setSettings(patch),
+    'teams:share': (e, rel) => ws.teamsShare(rel),
+    'config:get': () => ws.getConfig(),
+    'config:set': (e, patch) => ws.setConfig(patch),
+    'workspace:choose': async (e) => {
+      const r = await ws.chooseWorkspace();
+      if (r.ok) setTimeout(() => e.sender.reload(), 100);
+      return r;
+    },
+    'page:set-status': (e, rel, status) => ws.setStatus(rel, status),
+    'media:save': (e, rel, name, bytes) => ws.mediaSave(rel, name, bytes),
+    'media:import': (e, rel, src) => ws.mediaImport(rel, src),
+    'media:pick': (e, rel) => ws.mediaPick(rel),
+    'template:save-user': (e, rel) => ws.saveUserTemplate(rel),
+    'templates:user': () => ws.listUserTemplates(),
   };
   for (const [channel, fn] of Object.entries(handlers)) ipcMain.handle(channel, fn);
 }

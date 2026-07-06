@@ -11,6 +11,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import methodLibrary from '../resources/method-library.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const SRC = path.join(here, '..', 'resources', 'v3-checklist.md');
@@ -29,6 +30,32 @@ function titleCase(s) {
     .join(' ');
 }
 const slug = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+
+// Split on commas, but never inside parentheses ("all test reports (structural,
+// environmental, …), certification docs" must stay as two items, not seven).
+function splitTopLevel(s) {
+  const out = [];
+  let depth = 0;
+  let cur = '';
+  for (const ch of s) {
+    if (ch === '(') depth++;
+    if (ch === ')') depth = Math.max(0, depth - 1);
+    if (ch === ',' && depth === 0) { out.push(cur); cur = ''; } else cur += ch;
+  }
+  out.push(cur);
+  return out;
+}
+
+// Every template gets a doc-control header and revision-history footer.
+// {{DOC}} and {{DATE}} tokens are substituted by the app at insert time.
+function wrap(body) {
+  return (
+    '`DOC ▮ {{DOC}} · REV A.0 · CLASS: INTERNAL · {{DATE}}`\n\n' +
+    body +
+    '\n\n---\n\n## Revision History\n\n' +
+    '| Rev | Date | Author | Change |\n| --- | --- | --- | --- |\n| A.0 | {{DATE}} |  | Initial draft |'
+  );
+}
 
 const packs = [];
 const gates = []; // { pack, title, items }
@@ -55,8 +82,8 @@ function pushTpl() {
       id: slug(curPack.id + '-' + curTpl.title),
       title: curTpl.title,
       roboOnly: curTpl.roboOnly,
-      body: buildBody(curTpl.items, true),
-      bodyCore: curTpl.roboOnly ? null : buildBody(curTpl.items, false),
+      body: wrap(buildBody(curTpl.items, true)),
+      bodyCore: curTpl.roboOnly ? null : wrap(buildBody(curTpl.items, false)),
     });
   }
   curTpl = null;
@@ -73,6 +100,8 @@ for (const raw of lines) {
     curPack = {
       id: 'phase-' + m[1].padStart(2, '0'),
       phase: Number(m[1]),
+      defaultFolderIndex: Number(m[1]),
+      source: 'From the V3 master documentation checklist',
       title: `Phase ${m[1]} — ${titleCase(m[2])}`,
       templates: [],
     };
@@ -82,7 +111,11 @@ for (const raw of lines) {
 
   if (/^## CROSS-CUTTING/.test(line)) {
     pushTpl();
-    curPack = { id: 'living-docs', phase: null, title: 'Living Docs — Cross-Cutting', templates: [] };
+    curPack = {
+      id: 'living-docs', phase: null, defaultFolderIndex: 11,
+      source: 'From the V3 master documentation checklist',
+      title: 'Living Docs — Cross-Cutting', templates: [],
+    };
     packs.push(curPack);
     continue;
   }
@@ -101,7 +134,7 @@ for (const raw of lines) {
       .replace(/Gate Archive Checkpoint/i, 'Gate Checklist')
       .replace(/Final Archive Checkpoint/i, 'Final Archive Checklist');
     if (title === m[1]) title = m[1] + ' Checklist';
-    const items = m[2].replace(/\.$/, '').split(/,\s*/)
+    const items = splitTopLevel(m[2].replace(/\.$/, ''))
       .map((s) => s.replace(/^and\s+/i, '').trim())
       .filter(Boolean)
       .map((s) => s[0].toUpperCase() + s.slice(1));
@@ -130,17 +163,32 @@ for (const raw of lines) {
 pushTpl();
 
 for (const g of gates) {
-  const body = [
+  const body = wrap([
     '*Complete, verified archive required before passing this gate:*',
     '',
     ...g.items.map((i) => `- [ ] ${i}`),
-  ].join('\n');
+  ].join('\n'));
   g.pack.templates.push({
     id: slug(g.pack.id + '-' + g.title),
     title: g.title,
     roboOnly: false,
     body,
     bodyCore: body,
+  });
+}
+
+// Merge the hand-curated cross-industry method library
+for (const mp of methodLibrary) {
+  packs.push({
+    id: mp.id,
+    phase: null,
+    defaultFolderIndex: mp.defaultFolderIndex,
+    source: mp.source,
+    title: mp.title,
+    templates: mp.templates.map((t) => {
+      const b = wrap(t.body);
+      return { id: slug(mp.id + '-' + t.title), title: t.title, roboOnly: false, body: b, bodyCore: b };
+    }),
   });
 }
 

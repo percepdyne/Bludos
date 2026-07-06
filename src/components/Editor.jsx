@@ -11,17 +11,47 @@ import TableCell from '@tiptap/extension-table-cell';
 import TableHeader from '@tiptap/extension-table-header';
 import Placeholder from '@tiptap/extension-placeholder';
 import { Markdown } from 'tiptap-markdown';
+import PromptModal from './PromptModal.jsx';
 
 const invoke = (...a) => window.bludos.invoke(...a);
+
+const WEBHOOK_HINT =
+  "In your Teams channel: ⋯ → Workflows → 'Post to a channel when a webhook request is received' → copy the request URL. Legacy Incoming Webhook connector URLs work too.";
+
+const STATUSES = ['Draft', 'In Review', 'Approved', 'Released', 'Superseded', 'Obsolete'];
+
+// The markdown model keeps portable relative paths (../_media/x.png); the DOM
+// needs absolute file:// URLs. mediaBase is set per-page before content loads.
+const mediaBase = { url: '' };
+const toFileUrl = (winPath) => 'file:///' + encodeURI(String(winPath).replace(/\\/g, '/'));
+const resolveSrc = (src) => {
+  if (/^(data|file|https?):/i.test(src) || !mediaBase.url) return src;
+  try { return new URL(src, mediaBase.url).href; } catch { return src; }
+};
+const LocalImage = Image.extend({
+  renderHTML({ HTMLAttributes }) {
+    return ['img', { ...HTMLAttributes, src: resolveSrc(HTMLAttributes.src || '') }];
+  },
+});
 
 export default function Editor({ rel, onRenamed }) {
   const [meta, setMeta] = useState({});
   const [title, setTitle] = useState('');
   const [saved, setSaved] = useState(true);
+  const [shareState, setShareState] = useState('idle'); // idle | busy | ok | err
+  const [shareErr, setShareErr] = useState('');
+  const [webhookModal, setWebhookModal] = useState(null); // null | { initial, thenShare }
+  const [tplSaved, setTplSaved] = useState(false);
   const loaded = useRef(false);
   const dirty = useRef(false);
   const saveTimer = useRef();
   const editorRef = useRef(null);
+
+  const insertImageResult = (r) => {
+    if (r && r.ok && editorRef.current) {
+      editorRef.current.chain().focus().setImage({ src: r.src }).run();
+    }
+  };
 
   const editor = useEditor({
     extensions: [
@@ -29,14 +59,44 @@ export default function Editor({ rel, onRenamed }) {
       TaskList,
       TaskItem.configure({ nested: true }),
       Link.configure({ openOnClick: false }),
-      Image,
+      LocalImage,
       Table.configure({ resizable: false }),
       TableRow,
       TableCell,
       TableHeader,
-      Placeholder.configure({ placeholder: 'Write, or insert a template from the sidebar…' }),
+      Placeholder.configure({ placeholder: 'Write, paste an image, or insert a template…' }),
       Markdown.configure({ html: false, linkify: true }),
     ],
+    editorProps: {
+      handlePaste(view, event) {
+        const items = [...(event.clipboardData?.items || [])];
+        const img = items.find((it) => it.type.startsWith('image/'));
+        if (!img) return false;
+        const f = img.getAsFile();
+        if (!f) return false;
+        f.arrayBuffer().then(async (buf) => {
+          const r = await invoke('media:save', rel, f.name || 'pasted.png', new Uint8Array(buf));
+          insertImageResult(r);
+        });
+        return true;
+      },
+      handleDrop(view, event, slice, moved) {
+        if (moved) return false;
+        const files = [...(event.dataTransfer?.files || [])].filter((f) => f.type.startsWith('image/'));
+        if (!files.length) return false;
+        event.preventDefault();
+        (async () => {
+          for (const f of files) {
+            const abs = window.bludos.filePath(f);
+            const r = abs
+              ? await invoke('media:import', rel, abs)
+              : await invoke('media:save', rel, f.name, new Uint8Array(await f.arrayBuffer()));
+            insertImageResult(r);
+          }
+        })();
+        return true;
+      },
+    },
     onUpdate({ editor }) {
       if (!loaded.current) return;
       dirty.current = true;
@@ -55,8 +115,11 @@ export default function Editor({ rel, onRenamed }) {
     if (!editor) return;
     let cancelled = false;
     (async () => {
-      const page = await invoke('page:read', rel);
+      const [page, info] = await Promise.all([invoke('page:read', rel), invoke('workspace:info')]);
       if (cancelled) return;
+      const dirParts = rel.split('/');
+      dirParts.pop();
+      mediaBase.url = toFileUrl(info.root + '/' + dirParts.join('/')) + '/';
       setMeta(page.meta || {});
       setTitle(page.title);
       editor.commands.setContent(page.markdown || '');
@@ -65,7 +128,8 @@ export default function Editor({ rel, onRenamed }) {
     return () => { cancelled = true; };
   }, [editor, rel]);
 
-  // Flush unsaved edits when the page unmounts (component is keyed by rel)
+  // Flush unsaved edits when the page unmounts. page:write refuses to write to
+  // missing files, so this can never resurrect a renamed or trashed page.
   useEffect(() => {
     return () => {
       clearTimeout(saveTimer.current);
@@ -76,11 +140,58 @@ export default function Editor({ rel, onRenamed }) {
     };
   }, [rel]);
 
+  const flushNow = async () => {
+    clearTimeout(saveTimer.current);
+    const ed = editorRef.current;
+    if (dirty.current && ed && !ed.isDestroyed) {
+      await invoke('page:write', rel, ed.storage.markdown.getMarkdown());
+      dirty.current = false;
+      setSaved(true);
+    }
+  };
+
   const commitTitle = async () => {
     const t = title.trim();
     if (!t || t === rel.split('/').pop().replace(/\.md$/i, '')) return;
+    await flushNow(); // save edits to the CURRENT path before it changes
     const newRel = await invoke('page:rename', rel, t);
     onRenamed(newRel);
+  };
+
+  const setStatus = async (status) => {
+    const data = await invoke('page:set-status', rel, status);
+    setMeta(data || { ...meta, status });
+  };
+
+  const saveAsTemplate = async () => {
+    await flushNow();
+    const r = await invoke('template:save-user', rel);
+    if (r.ok) { setTplSaved(true); setTimeout(() => setTplSaved(false), 3000); }
+  };
+
+  const doShare = async () => {
+    setShareState('busy');
+    await flushNow();
+    const r = await invoke('teams:share', rel);
+    if (r.ok) {
+      setShareState('ok');
+      setTimeout(() => setShareState('idle'), 3000);
+    } else {
+      setShareErr(r.error || 'Unknown error');
+      setShareState('err');
+      setTimeout(() => setShareState('idle'), 6000);
+    }
+  };
+
+  const share = async () => {
+    const s = await invoke('settings:get');
+    if (!s.teamsWebhookUrl) setWebhookModal({ initial: '', thenShare: true });
+    else doShare();
+  };
+
+  const openWebhookSettings = async () => {
+    const s = await invoke('settings:get');
+    setWebhookModal({ initial: s.teamsWebhookUrl || '', thenShare: false });
   };
 
   if (!editor) return null;
@@ -93,6 +204,7 @@ export default function Editor({ rel, onRenamed }) {
     >{children}</button>
   );
   const c = () => editor.chain().focus();
+  const inTable = editor.isActive('table');
 
   return (
     <div className="editor">
@@ -105,12 +217,42 @@ export default function Editor({ rel, onRenamed }) {
           onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
         />
         <div className="editor-meta">
-          <span className={'status s-' + String(meta.status || 'Draft').toLowerCase().replace(/\s/g, '-')}>
-            {meta.status || 'Draft'}
-          </span>
+          {meta.doc && <span className="doc-chip">{meta.doc}</span>}
+          <select
+            className={'status s-' + String(meta.status || 'Draft').toLowerCase().replace(/\s/g, '-')}
+            value={STATUSES.includes(meta.status) ? meta.status : 'Draft'}
+            onChange={(e) => setStatus(e.target.value)}
+            title="Document status (FM.D lifecycle)"
+          >
+            {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
           <span className="save-state">{saved ? 'Saved' : 'Saving…'}</span>
+          {shareState === 'err' && <span className="share-err" title={shareErr}>Share failed: {shareErr}</span>}
+          <button className="share-btn" onClick={saveAsTemplate} title="Save this page as a reusable template">
+            {tplSaved ? 'Template ✓' : '▤+ Template'}
+          </button>
+          <button className="share-btn" onClick={share} disabled={shareState === 'busy'}>
+            {shareState === 'busy' ? 'Sharing…' : shareState === 'ok' ? 'Shared ✓' : '⇗ Share to Teams'}
+          </button>
+          <button className="tb" title="Teams webhook settings" onClick={openWebhookSettings}>⚙</button>
         </div>
       </div>
+      {webhookModal && (
+        <PromptModal
+          title="Microsoft Teams webhook"
+          placeholder="https://… (webhook request URL)"
+          hint={WEBHOOK_HINT}
+          initial={webhookModal.initial}
+          submitLabel="Save"
+          onSubmit={async (v) => {
+            const thenShare = webhookModal.thenShare;
+            setWebhookModal(null);
+            await invoke('settings:set', { teamsWebhookUrl: v.trim() });
+            if (v.trim() && thenShare) doShare();
+          }}
+          onCancel={() => setWebhookModal(null)}
+        />
+      )}
       <div className="toolbar">
         <B label="Heading 1" active={editor.isActive('heading', { level: 1 })} action={() => c().toggleHeading({ level: 1 }).run()}>H1</B>
         <B label="Heading 2" active={editor.isActive('heading', { level: 2 })} action={() => c().toggleHeading({ level: 2 }).run()}>H2</B>
@@ -126,8 +268,20 @@ export default function Editor({ rel, onRenamed }) {
         <span className="tb-sep" />
         <B label="Quote" active={editor.isActive('blockquote')} action={() => c().toggleBlockquote().run()}>❝</B>
         <B label="Code block" active={editor.isActive('codeBlock')} action={() => c().toggleCodeBlock().run()}>{'</>'}</B>
+        <B label="Insert image (or just paste / drop one)" action={async () => insertImageResult(await invoke('media:pick', rel))}>🖼</B>
         <B label="Insert table" action={() => c().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}>⊞</B>
         <B label="Divider" action={() => c().setHorizontalRule().run()}>—</B>
+        {inTable && (
+          <>
+            <span className="tb-sep" />
+            <span className="tb-hint">TABLE</span>
+            <B label="Add row below" action={() => c().addRowAfter().run()}>+R</B>
+            <B label="Delete row" action={() => c().deleteRow().run()}>−R</B>
+            <B label="Add column right" action={() => c().addColumnAfter().run()}>+C</B>
+            <B label="Delete column" action={() => c().deleteColumn().run()}>−C</B>
+            <B label="Delete table" action={() => c().deleteTable().run()}>✕⊞</B>
+          </>
+        )}
       </div>
       <EditorContent editor={editor} className="editor-body" />
     </div>

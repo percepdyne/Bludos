@@ -32,7 +32,7 @@ export default function Archive() {
     }));
 
   const remove = async (id) => {
-    if (window.confirm('Remove this asset from the archive? The stored copy is deleted.')) {
+    if (window.confirm('Move this asset to the trash? It can be restored for 30 days.')) {
       setItems(await invoke('archive:remove', id));
     }
   };
@@ -50,7 +50,7 @@ export default function Archive() {
       onDrop={onDrop}
     >
       <header className="archive-head">
-        <h2>Archive</h2>
+        <h2><span className="panel-tag">▮ ARCHIVE_LOG</span> <span className="panel-sub">{String(items.length).padStart(3, '0')} ASSETS</span></h2>
         <input
           className="archive-filter"
           placeholder="Filter by name or tag…"
@@ -69,13 +69,18 @@ export default function Archive() {
       </header>
       <p className="archive-hint">Drop images, PDFs, CAD files — anything — anywhere on this view to archive it.</p>
       <div className="grid">
-        {shown.map((a) => (
+        {shown.map((a, i) => (
           <div className="card" key={a.id}>
+            <div className="card-code">
+              <span>{String(shown.length - i).padStart(4, '0')}</span>
+              <span>{(a.kind || 'file').toUpperCase()}</span>
+            </div>
             <div className="thumb" onClick={() => invoke('archive:open', a.id)} title="Open">
               {a.kind === 'image'
                 ? <img src={a.url} alt={a.name} loading="lazy" />
                 : <span className={'glyph g-' + a.kind}>{GLYPHS[a.kind] || GLYPHS.file}</span>}
             </div>
+            <div className="card-barcode" />
             <div className="card-name" title={a.name}>{a.name}</div>
             <TagInput initial={(a.tags || []).join(', ')} onCommit={(v) => setTags(a.id, v)} />
             <button className="card-del" title="Remove" onClick={() => remove(a.id)}>✕</button>

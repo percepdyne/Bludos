@@ -15,14 +15,16 @@ export default function Trash({ onRestored }) {
 
   return (
     <div className="trash">
-      <h2>Trash</h2>
+      <h2><span className="panel-tag">▮ TRASH_LOG</span> <span className="panel-sub">RETENTION 30D</span></h2>
       <p className="muted">Pages are kept for 30 days, then removed automatically.</p>
       {items.length === 0 && <div className="muted pad">Trash is empty.</div>}
       {items.map((t) => (
         <div className="trash-row" key={t.id}>
           <div>
-            <div className="trash-title">{t.title}</div>
-            <div className="trash-meta">{t.rel} · deleted {new Date(t.when).toLocaleString()}</div>
+            <div className="trash-title">
+              <span className="kind-badge">{t.kind === 'asset' ? 'ASSET' : 'PAGE'}</span> {t.title}
+            </div>
+            <div className="trash-meta">{t.kind === 'asset' ? 'archive asset' : t.rel} · deleted {new Date(t.when).toLocaleString()}</div>
           </div>
           <button onClick={() => restore(t.id)}>Restore</button>
         </div>

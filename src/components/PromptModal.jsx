@@ -1,7 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 
-export default function PromptModal({ title, placeholder, onSubmit, onCancel }) {
-  const [val, setVal] = useState('');
+export default function PromptModal({
+  title, placeholder, hint, initial = '', submitLabel = 'OK', onSubmit, onCancel,
+}) {
+  const [val, setVal] = useState(initial);
   const ref = useRef(null);
 
   useEffect(() => { ref.current?.focus(); }, []);
@@ -20,9 +22,10 @@ export default function PromptModal({ title, placeholder, onSubmit, onCancel }) 
             if (e.key === 'Escape') onCancel();
           }}
         />
+        {hint && <p className="prompt-hint">{hint}</p>}
         <div className="prompt-actions">
           <button onClick={onCancel}>Cancel</button>
-          <button className="primary" onClick={() => onSubmit(val)}>Create</button>
+          <button className="primary" onClick={() => onSubmit(val)}>{submitLabel}</button>
         </div>
       </div>
     </div>
