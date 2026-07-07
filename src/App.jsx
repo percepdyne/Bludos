@@ -6,6 +6,8 @@ import Trash from './components/Trash.jsx';
 import TemplatesModal from './components/TemplatesModal.jsx';
 import PromptModal from './components/PromptModal.jsx';
 import QuickOpen from './components/QuickOpen.jsx';
+import Toolbox from './components/Toolbox.jsx';
+import SettingsModal from './components/SettingsModal.jsx';
 import TEMPLATE_PACKS from './templates.json';
 
 const invoke = (...a) => window.bludos.invoke(...a);
@@ -22,11 +24,14 @@ export default function App() {
 
   const [info, setInfo] = useState(null);
   const [config, setConfig] = useState({});
+  const [settings, setSettings] = useState({});
   const [tree, setTree] = useState({ projects: [] });
   const [view, setView] = useState({ type: 'home' });
   const [showTemplates, setShowTemplates] = useState(null); // null | { project?, folderName? }
   const [prompt, setPrompt] = useState(null);
   const [quickOpen, setQuickOpen] = useState(false);
+  const [toolboxOpen, setToolboxOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [recents, setRecents] = useState(loadRecents);
 
   const refreshTree = useCallback(async () => setTree(await invoke('tree:get')), []);
@@ -34,8 +39,19 @@ export default function App() {
   useEffect(() => {
     invoke('workspace:info').then(setInfo);
     invoke('config:get').then(setConfig);
+    invoke('settings:get').then(setSettings);
     refreshTree();
   }, [refreshTree]);
+
+  // Appearance: accent + sheet applied as data attributes driving CSS variables
+  useEffect(() => {
+    const a = settings.appearance || {};
+    document.documentElement.dataset.accent = a.accent || 'lime';
+    document.documentElement.dataset.sheet = a.sheet || 'light';
+  }, [settings]);
+
+  const saveSettings = async (patch) => setSettings(await invoke('settings:set', patch));
+  const saveConfig = async (patch) => setConfig(await invoke('config:set', patch));
 
   // Block the window from navigating away when files are dropped outside a drop zone
   useEffect(() => {
@@ -80,18 +96,6 @@ export default function App() {
       },
     });
 
-  const setOperator = () =>
-    setPrompt({
-      title: 'Operator name',
-      placeholder: 'Your name (stamped as author on documents)…',
-      initial: config.userName || '',
-      submitLabel: 'Save',
-      onSubmit: async (name) => {
-        setPrompt(null);
-        setConfig(await invoke('config:set', { userName: (name || '').trim() }));
-      },
-    });
-
   const switchWorkspace = () => invoke('workspace:choose'); // window reloads on success
 
   const newPage = async (project, folder) => {
@@ -125,8 +129,10 @@ export default function App() {
         onShowTemplatesAt={(project, folderName) => setShowTemplates({ project, folderName })}
         onShowArchive={() => setView({ type: 'archive' })}
         onShowTrash={() => setView({ type: 'trash' })}
+        onShowToolbox={() => setToolboxOpen((v) => !v)}
+        onShowSettings={() => setSettingsOpen(true)}
         onHome={() => setView({ type: 'home' })}
-        onSetOperator={setOperator}
+        onSetOperator={() => setSettingsOpen(true)}
         onSwitchWorkspace={switchWorkspace}
       />
       <main className="main">
@@ -143,6 +149,26 @@ export default function App() {
           <Home tree={tree} info={info} onNewProject={newProject} onShowTemplates={() => setShowTemplates({})} />
         )}
       </main>
+      {toolboxOpen && (
+        <Toolbox
+          settings={settings}
+          operator={config.userName || ''}
+          currentRel={view.type === 'page' ? view.rel : null}
+          onClose={() => setToolboxOpen(false)}
+          onSaveSettings={saveSettings}
+        />
+      )}
+      {settingsOpen && (
+        <SettingsModal
+          settings={settings}
+          config={config}
+          info={info}
+          onClose={() => setSettingsOpen(false)}
+          onSaveSettings={saveSettings}
+          onSaveConfig={saveConfig}
+          onSwitchWorkspace={switchWorkspace}
+        />
+      )}
       {showTemplates && info && (
         <TemplatesModal
           info={info}

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import OverlayViewer from './OverlayViewer.jsx';
 
 const invoke = (...a) => window.bludos.invoke(...a);
 
@@ -9,6 +10,7 @@ export default function Archive() {
   const [filter, setFilter] = useState('');
   const [urlInput, setUrlInput] = useState('');
   const [dragging, setDragging] = useState(false);
+  const [viewer, setViewer] = useState(null);
 
   useEffect(() => { invoke('archive:list').then(setItems); }, []);
 
@@ -32,7 +34,7 @@ export default function Archive() {
     }));
 
   const remove = async (id) => {
-    if (window.confirm('Move this asset to the trash? It can be restored for 30 days.')) {
+    if (window.confirm('☢ Nuke this asset? It sinks to the Trench and is salvageable for 30 days.')) {
       setItems(await invoke('archive:remove', id));
     }
   };
@@ -83,7 +85,10 @@ export default function Archive() {
             <div className="card-barcode" />
             <div className="card-name" title={a.name}>{a.name}</div>
             <TagInput initial={(a.tags || []).join(', ')} onCommit={(v) => setTags(a.id, v)} />
-            <button className="card-del" title="Remove" onClick={() => remove(a.id)}>✕</button>
+            {a.kind === 'image' && (
+              <button className="card-ov" title="Composition overlays (thirds, golden, spiral)" onClick={() => setViewer(a)}>◫</button>
+            )}
+            <button className="card-del" title="Nuke — sinks to the Trench for 30 days" onClick={() => remove(a.id)}>☢</button>
           </div>
         ))}
         {shown.length === 0 && (
@@ -92,6 +97,7 @@ export default function Archive() {
           </div>
         )}
       </div>
+      {viewer && <OverlayViewer asset={viewer} onClose={() => setViewer(null)} />}
     </div>
   );
 }

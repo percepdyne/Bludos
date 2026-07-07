@@ -6,7 +6,7 @@ export default function Sidebar({
   tree, activeRel, operator,
   onOpenPage, onNewPage, onTrashPage, onNewProject, onExportProject,
   onShowTemplates, onShowTemplatesAt, onShowArchive, onShowTrash, onHome,
-  onSetOperator, onSwitchWorkspace,
+  onShowToolbox, onShowSettings, onSetOperator, onSwitchWorkspace,
 }) {
   const [q, setQ] = useState('');
   const [results, setResults] = useState(null);
@@ -107,9 +107,9 @@ export default function Sidebar({
                             <span className="tree-page-title">{pg.title}</span>
                             <button
                               className="mini danger"
-                              title="Move to trash"
+                              title="Nuke — sinks to the Trench for 30 days"
                               onClick={(e) => { e.stopPropagation(); onTrashPage(pg.rel); }}
-                            >✕</button>
+                            >☢</button>
                           </div>
                         ))}
                     </div>
@@ -136,9 +136,11 @@ export default function Sidebar({
         </div>
       </div>
       <div className="sidebar-actions">
+        <button onClick={onShowToolbox}>⚒ TOOLBOX</button>
         <button onClick={onShowTemplates}>▤ TEMPLATES</button>
         <button onClick={onShowArchive}>▣ ARCHIVE</button>
-        <button onClick={onShowTrash}>♻ TRASH</button>
+        <button onClick={onShowTrash} title="The Trench — nuked items rest here for 30 days">≋ TRENCH</button>
+        <button className="wide" onClick={onShowSettings}>⛭ SETTINGS</button>
         <button className="primary" onClick={onNewProject}>+ NEW PROJECT</button>
       </div>
     </aside>

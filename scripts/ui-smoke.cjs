@@ -11,6 +11,14 @@ const ws = require('../electron/workspace.cjs');
 require('../electron/main.cjs'); // real bootstrap: IPC + window
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const waitFor = async (fn, timeout = 6000, every = 250) => {
+  const t0 = Date.now();
+  for (;;) {
+    if (await fn()) return true;
+    if (Date.now() - t0 > timeout) return false;
+    await sleep(every);
+  }
+};
 const PROJECT = 'UI Audit ' + Date.now();
 const results = [];
 const step = async (label, fn) => {
@@ -27,7 +35,12 @@ app.whenReady().then(async () => {
     if (level >= 3 && !message.includes('Electron Security Warning')) consoleErrors.push(message);
   });
 
+  let prevPins = [], prevRecents = [];
   try {
+    const s0 = ws.getSettings();
+    prevPins = s0.pinnedTools || [];
+    prevRecents = s0.recentTools || [];
+
     // Fixture: project + a table/checklist-heavy method template page
     const packs = require('../src/templates.json');
     const tpl = packs.find((p) => p.id === 'm-quality').templates.find((t) => t.title.includes('DFMEA'));
@@ -110,18 +123,18 @@ app.whenReady().then(async () => {
 
     await step('checkbox toggle autosaves to disk as markdown', async () => {
       await exec(`document.querySelector('.ProseMirror input[type=checkbox]').click(); true`);
-      await sleep(1400); // 700ms debounce + margin
       const t = ws.getTree().projects.find((p) => p.name === PROJECT);
       const pg = t.folders.find((f) => f.name.startsWith('03')).pages[0];
-      assert(ws.readPage(pg.rel).markdown.includes('- [x]'), 'checked task not persisted as - [x]');
+      const saved = await waitFor(() => ws.readPage(pg.rel).markdown.includes('- [x]'));
+      assert(saved, 'checked task not persisted as - [x] within 6s');
     });
 
     await step('status change persists to frontmatter', async () => {
       assert(await exec(`__setInput('select.status', 'Approved')`), 'status select not settable');
-      await sleep(500);
       const t = ws.getTree().projects.find((p) => p.name === PROJECT);
       const pg = t.folders.find((f) => f.name.startsWith('03')).pages[0];
-      assert(ws.readPage(pg.rel).meta.status === 'Approved', 'status not persisted');
+      const saved = await waitFor(() => ws.readPage(pg.rel).meta.status === 'Approved');
+      assert(saved, 'status not persisted within 6s');
     });
 
     await step('title rename via UI renames the file (with unsaved-edit flush)', async () => {
@@ -130,13 +143,113 @@ app.whenReady().then(async () => {
       await sleep(100); // still inside debounce window — deliberately dirty
       assert(await exec(`__setInput('.editor-title', 'DFMEA Renamed UI')`), 'title input not settable');
       await exec(`document.querySelector('.editor-title').blur(); true`);
-      await sleep(900);
       const dir = path.join(ws.info().root, PROJECT, '03 Detailed Engineering & DFx');
+      const renamed = await waitFor(() => fs.readdirSync(dir).includes('DFMEA Renamed UI.md'));
       const files = fs.readdirSync(dir);
-      assert(files.includes('DFMEA Renamed UI.md'), 'renamed file missing: ' + files.join(', '));
+      assert(renamed, 'renamed file missing: ' + files.join(', '));
       assert(files.length === 1, 'old file resurrected (A1 regression): ' + files.join(', '));
       const g = ws.readPage(PROJECT + '/03 Detailed Engineering & DFx/DFMEA Renamed UI.md');
       assert(g.markdown.includes('- [x]'), 'pre-rename dirty edit lost');
+    });
+
+    await step('toolbox: battery calc inserts CALC block into the open document', async () => {
+      assert(await exec(`__click('.sidebar-actions button', 'TOOLBOX')`), 'toolbox button missing');
+      await sleep(300);
+      assert(await exec(`__has('.toolbox')`), 'toolbox panel missing');
+      const nTools = await exec(`__count('.tool-row')`);
+      assert(nTools >= 50, `toolbox lists ${nTools} tools, expected >= 50`);
+      assert(await exec(`__click('.tool-row', 'Battery Runtime')`), 'battery tool missing');
+      await sleep(300);
+      const tablesBefore = await exec(`__count('.ProseMirror table')`);
+      assert(await exec(`__click('[data-tool=battery] .insert-block')`), 'battery insert button missing');
+      await sleep(400);
+      const tablesAfter = await exec(`__count('.ProseMirror table')`);
+      assert(tablesAfter === tablesBefore + 1, `block not inserted as real table (${tablesBefore} → ${tablesAfter})`);
+      const relPage = PROJECT + '/03 Detailed Engineering & DFx/DFMEA Renamed UI.md';
+      // autosave is debounced 700ms — poll instead of racing a fixed sleep
+      const saved = await waitFor(() => ws.readPage(relPage).markdown.includes('CALC ▮ battery-runtime'));
+      assert(saved, 'CALC block not persisted to disk within 6s');
+      const g = ws.readPage(relPage);
+      assert(g.markdown.includes('| Runtime |'), 'calc results table not persisted');
+      assert(g.markdown.includes('| Runtime |'), 'calc results table not persisted');
+      assert(g.markdown.includes('Failure mode'), 'insert replaced existing content instead of appending');
+      assert(g.markdown.indexOf('Failure mode') < g.markdown.indexOf('CALC ▮'), 'block not appended at end');
+      await exec(`__click('.toolbox .close'); true`);
+      await sleep(200);
+    });
+
+    await step('declarative tool (Ohm\'s Law) computes and inserts to disk', async () => {
+      assert(await exec(`__click('.sidebar-actions button', 'TOOLBOX')`), 'toolbox button missing');
+      await sleep(300);
+      assert(await exec(`__click('.tool-row', "Ohm's Law")`), 'ohms-law tool row missing');
+      await sleep(250);
+      // defaults: 12 V, 0.5 A, R blank → live results should show 24 Ω and 6 W
+      const txt = await exec(`document.querySelector('[data-tool=ohms-law] .tool-out').textContent`);
+      assert(txt.includes('24') && txt.includes('6 W'), 'ohms-law live compute wrong: ' + txt.slice(0, 120));
+      assert(await exec(`__click('[data-tool=ohms-law] .insert-block')`), 'ohms-law insert button missing');
+      const relPage = PROJECT + '/03 Detailed Engineering & DFx/DFMEA Renamed UI.md';
+      const saved = await waitFor(() => ws.readPage(relPage).markdown.includes('CALC ▮ ohms-law'));
+      assert(saved, 'ohms-law CALC block not persisted within 6s');
+      await exec(`__click('.toolbox .close'); true`);
+      await sleep(200);
+    });
+
+    await step('toolbox search filters, Enter opens first match, pin works', async () => {
+      assert(await exec(`__click('.sidebar-actions button', 'TOOLBOX')`), 'toolbox button missing');
+      await sleep(300);
+      assert(await exec(`__has('.toolbox-search')`), 'search box missing');
+      assert(await exec(`__setInput('.toolbox-search', 'ziegler')`), 'search not settable');
+      await sleep(250);
+      const nRes = await exec(`__count('.tool-row')`);
+      assert(nRes === 1, `expected exactly 1 match for "ziegler", got ${nRes}`);
+      await exec(`document.querySelector('.toolbox-search').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); true`);
+      await sleep(300);
+      assert(await exec(`(document.querySelector('[data-tool="pid-zn"]')||{style:{}}).style.display === 'block'`), 'Enter did not open first match');
+      assert(await exec(`__has('.toolbox-head button[title*="Reset"]')`), 'reset button missing in tool header');
+      await exec(`__click('.tb', 'BACK'); true`);
+      await sleep(150);
+      await exec(`__setInput('.toolbox-search', ''); true`);
+      await sleep(250);
+      await exec(`document.querySelector('.tool-row .pin').click(); true`);
+      await sleep(300);
+      assert(await exec(`document.querySelector('.toolbox-body').textContent.includes('★ PINNED')`), 'pinned section did not appear');
+      await exec(`__click('.toolbox .close'); true`);
+      await sleep(150);
+    });
+
+    await step('all-tools sweep: every tool computes cleanly with defaults', async () => {
+      assert(await exec(`__click('.sidebar-actions button', 'TOOLBOX')`), 'toolbox button missing');
+      await sleep(300);
+      const ids = await exec(`[...new Set([...document.querySelectorAll('.tool-row')].map((e) => e.dataset.tid))].filter(Boolean)`);
+      assert(ids.length >= 50, `sweep found only ${ids.length} unique tools`);
+      const bad = [];
+      for (const id of ids) {
+        await exec(`(document.querySelector('.tool-row[data-tid="${id}"]') || { click() {} }).click(); true`);
+        await sleep(70);
+        const txt = await exec(`(document.querySelector('[data-tool="${id}"] .tool-out') || {}).textContent || ''`);
+        if (!/\d/.test(txt) || /NaN|check inputs/i.test(txt)) bad.push(`${id} → "${txt.slice(0, 60)}"`);
+        await exec(`__click('.tb', 'BACK'); true`);
+        await sleep(40);
+      }
+      assert(bad.length === 0, `${bad.length} tool(s) misbehaving: ` + bad.join(' | '));
+      console.log(`  · swept ${ids.length} tools, all computed clean`);
+      await exec(`__click('.toolbox .close'); true`);
+      await sleep(150);
+    });
+
+    await step('settings: accent switch applies instantly via data attribute', async () => {
+      assert(await exec(`__click('.sidebar-actions button', 'SETTINGS')`), 'settings button missing');
+      await sleep(300);
+      assert(await exec(`__has('.settings-modal')`), 'settings modal missing');
+      assert(await exec(`__click('.settings-nav-item', 'Appearance')`), 'appearance section missing');
+      await sleep(200);
+      assert(await exec(`__click('.accent-swatch[data-a=cyan]')`), 'cyan swatch missing');
+      await sleep(350);
+      assert((await exec(`document.documentElement.dataset.accent`)) === 'cyan', 'accent not applied');
+      await exec(`__click('.accent-swatch[data-a=lime]'); true`);
+      await sleep(350);
+      await exec(`__click('.settings-modal .close'); true`);
+      await sleep(200);
     });
 
     await step('archive view renders label-sheet UI', async () => {
@@ -146,10 +259,11 @@ app.whenReady().then(async () => {
       assert(await exec(`document.querySelector('.archive-head').textContent.includes('ARCHIVE_LOG')`), 'archive header missing');
     });
 
-    await step('trash view renders and lists kinds', async () => {
-      assert(await exec(`__click('.sidebar-actions button', 'TRASH')`), 'trash button missing');
+    await step('trench view renders (renamed trash)', async () => {
+      assert(await exec(`__click('.sidebar-actions button', 'TRENCH')`), 'trench button missing');
       await sleep(400);
-      assert(await exec(`__has('.trash')`), 'trash view missing');
+      assert(await exec(`__has('.trash')`), 'trench view missing');
+      assert(await exec(`document.querySelector('.trash').textContent.includes('TRENCH_LOG')`), 'trench header missing');
     });
 
     await step('no renderer console errors during the whole run', async () => {
@@ -158,6 +272,7 @@ app.whenReady().then(async () => {
   } catch (err) {
     results.push(['FAIL', 'harness error — ' + err.message]);
   } finally {
+    try { ws.setSettings({ pinnedTools: prevPins, recentTools: prevRecents }); } catch { /* ignore */ }
     try { fs.rmSync(path.join(ws.info().root, PROJECT), { recursive: true, force: true }); } catch { /* ignore */ }
     let failed = 0;
     for (const [status, label] of results) {

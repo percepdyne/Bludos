@@ -46,6 +46,7 @@ function registerIpc() {
     'teams:share': (e, rel) => ws.teamsShare(rel),
     'config:get': () => ws.getConfig(),
     'config:set': (e, patch) => ws.setConfig(patch),
+    'workspace:open-folder': () => ws.openRoot(),
     'workspace:choose': async (e) => {
       const r = await ws.chooseWorkspace();
       if (r.ok) setTimeout(() => e.sender.reload(), 100);

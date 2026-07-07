@@ -140,6 +140,26 @@ export default function Editor({ rel, onRenamed }) {
     };
   }, [rel]);
 
+  // Toolbox "insert as block": append only the block at the end of the doc —
+  // no full-document rewrite, so cursor context and undo granularity survive.
+  useEffect(() => {
+    const h = (e) => {
+      const ed = editorRef.current;
+      if (!ed || ed.isDestroyed || !loaded.current) return;
+      // tiptap-markdown patches insertContentAt to parse markdown strings
+      const ok = ed.commands.insertContentAt(ed.state.doc.content.size, '\n\n' + e.detail + '\n');
+      if (ok) {
+        ed.commands.focus('end');
+      } else {
+        // fallback: full roundtrip append (slower but safe)
+        const cur = ed.storage.markdown.getMarkdown();
+        ed.commands.setContent(cur + '\n\n' + e.detail + '\n', true);
+      }
+    };
+    window.addEventListener('bludos:insert-block', h);
+    return () => window.removeEventListener('bludos:insert-block', h);
+  }, []);
+
   const flushNow = async () => {
     clearTimeout(saveTimer.current);
     const ed = editorRef.current;

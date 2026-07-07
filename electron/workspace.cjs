@@ -72,6 +72,11 @@ function initWorkspace() {
   cleanupTrash();
 }
 
+function openRoot() {
+  shell.openPath(ROOT);
+  return true;
+}
+
 async function chooseWorkspace() {
   const { dialog } = require('electron');
   const res = await dialog.showOpenDialog({
@@ -748,7 +753,7 @@ module.exports = {
   trashPage, listTrash, restoreTrash,
   archiveList, archiveAddFiles, archiveAddUrl, archiveUpdate, archiveRemove, archiveOpen,
   search, getSettings, setSettings, teamsShare, exportProject,
-  getConfig, setConfig, chooseWorkspace, reconcileArchive,
+  getConfig, setConfig, chooseWorkspace, reconcileArchive, openRoot,
   mediaSave, mediaImport, mediaPick,
   saveUserTemplate, listUserTemplates,
 };

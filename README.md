@@ -40,7 +40,20 @@ npm run dist     # build Windows installer + portable exe into release/
 - **Save your own templates** — ▤+ on any page saves it into `.bludos/templates/`, appearing in the template browser under "My Studio".
 - **Quick-open** — Ctrl+P jumps to any document; recents shown when empty.
 - **Workspace picker** — ⇄ in the sidebar readout points Bludos at any folder (including a shared or synced drive). External edits are respected: folders and files created outside the app appear in the tree, and archive files added or removed externally are reconciled into the index at startup.
-- **Full-text search**, **Trash** (30-day retention for pages *and* archive assets), **Share to Teams** (Adaptive Card via Workflows webhook — configure once via ⚙ next to the Share button).
+- **Toolbox — 54 engineering tools in 8 packs** (⚒ in the sidebar; enable packs per-workspace in Settings). Every tool has **⤓ INSERT AS BLOCK** — inputs and results are stamped into the open document as a traceable `CALC ▮` table, so calculations become controlled documentation:
+  - **CORE** — Color Lab (eyedropper, HEX/RGB/HSL/CMYK/Lab, nearest RAL, ΔE2000), unit converter, ratio/scale/shrinkage
+  - **ELECTRONICS (13)** — Ohm's law, LED resistor (E24), voltage divider, resistor color code, wire gauge/voltage drop, RC filter, charge time, bulk cap sizer, ADC resolution, PWM timing, PCB trace width (IPC-2221), regulator loss, junction temp/heatsink
+  - **ROBOTICS (8)** — drive performance (speed/traction/grade), arm joint torque, battery S/P pack designer, gear train, lead screw, belt/pulley, 2-link arm workspace, encoder resolution
+  - **MECHANICAL (9)** — tolerance stack-up, cantilever beam FOS, snap-fit strain, fastener torque, compression spring, draft angle, thermal expansion, ISO hole/shaft fits (H7/g6·k6·p6), section properties
+  - **EV / POWER (8)** — battery runtime, motor load verdict, EV range, traction requirement, C-rate, motor-from-Kv, regen energy, cell imbalance check
+  - **CONTROL SYSTEMS (6)** — PID Ziegler–Nichols (closed loop + FOPDT step response), first/second-order response, loop-rate planner, filter coefficients (LPF α + complementary)
+  - **COMMUNICATION (6)** — UART timing, I²C/SPI bus budget, wireless link budget (FSPL), antenna length, packet throughput, CAN bus load
+  - **RESEARCH** — SUS scorer
+  The toolbox has **search** (Enter opens the first match, Esc peels back a layer at a time), **★ pinning**, an auto **RECENT** list, collapsible packs, per-tool **↺ reset to defaults**, and **⧉ copy-as-markdown** next to every insert button. Tools lazy-mount and keep their values while the panel is open.
+  New calculators are ~15-line declarative specs in `src/tools/calcs.js`, rendered by a generic engine — adding a tool needs no new UI code. Every build runs `scripts/test-calcs.mjs`, which validates all specs compute cleanly against their defaults, and the UI suite sweeps all 54 tools in the real app.
+- **Composition overlays** — ◫ on any archive image: rule of thirds, golden sections, golden spiral, grid, with opacity and flip.
+- **Settings** — ⛭ consolidates operator profile, workspace switching, appearance (accent color: lime/cyan/amber; light/dark writing sheet), tool-pack toggles, integrations, and shortcuts.
+- **Full-text search**, **the Trench** (☢ Nuke sinks pages *and* archive assets for 30 days — ⚓ Salvage restores them), **Share to Teams** (Adaptive Card via Workflows webhook — configure in Settings ▸ Integrations).
 - **Data safety** — all app indexes are written atomically with `.bak` fallbacks; late autosaves can never resurrect renamed or trashed pages.
 
 ## Where your data lives
