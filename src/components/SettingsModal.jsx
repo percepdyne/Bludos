@@ -14,6 +14,7 @@ export default function SettingsModal({ settings, config, info, onClose, onSaveS
   const [sec, setSec] = useState('Profile');
   const [name, setName] = useState(config.userName || '');
   const [hook, setHook] = useState(settings.teamsWebhookUrl || '');
+  const [chain, setChain] = useState(null);
 
   React.useEffect(() => {
     const onKey = (e) => e.key === 'Escape' && onClose();
@@ -133,6 +134,18 @@ export default function SettingsModal({ settings, config, info, onClose, onSaveS
                 <p className="set-hint">Nuked pages and assets sink to the Trench and are salvageable for 30 days, then dissolve permanently.</p>
                 <div className="col-label">INDEXES</div>
                 <p className="set-hint">Archive and trench indexes are written atomically with .bak fallbacks, and the archive index reconciles against the real files at every startup.</p>
+                <div className="col-label">LAB NOTEBOOK CHAIN</div>
+                <p className="set-hint">Ctrl+L opens today's log page. When a new day's log is created, the previous day is sealed: its SHA-256 joins an append-only chain, making the notebook tamper-evident.</p>
+                <button onClick={async () => setChain(await invoke('log:verify'))}>⛓ VERIFY CHAIN</button>
+                {chain && (
+                  <p className="set-hint">
+                    {chain.length === 0
+                      ? 'Chain is empty — a log is sealed when the next day\'s log is created.'
+                      : chain.every((c) => c.ok)
+                        ? `✓ ${chain.length} sealed log(s) verified — no tampering detected.`
+                        : `⚠ FAILED verification: ${chain.filter((c) => !c.ok).map((c) => c.file + (c.missing ? ' (missing)' : ' (modified)')).join(', ')}`}
+                  </p>
+                )}
               </>
             )}
           </div>

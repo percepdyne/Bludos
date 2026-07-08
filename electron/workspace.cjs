@@ -248,10 +248,40 @@ function writePage(rel, markdown) {
 function setStatus(rel, status) {
   const abs = resolveRel(rel);
   const g = matter(fs.readFileSync(abs, 'utf8'));
+  // FM.D discipline: every status transition snapshots the outgoing revision
+  try {
+    const key = g.data.doc || rel.split('/').join('__');
+    const d = p('.bludos', 'revisions', safeName(key));
+    fs.mkdirSync(d, { recursive: true });
+    fs.copyFileSync(abs, path.join(d, Date.now() + '-' + String(g.data.status || 'Draft').replace(/\s/g, '') + '.md'));
+  } catch { /* snapshot is best-effort */ }
   g.data.status = status;
   g.data.updated = new Date().toISOString();
   fs.writeFileSync(abs, matter.stringify(g.content, g.data));
   return g.data;
+}
+
+function revKey(rel) {
+  try { return matter(fs.readFileSync(resolveRel(rel), 'utf8')).data.doc || rel.split('/').join('__'); }
+  catch { return rel.split('/').join('__'); }
+}
+
+function listRevisions(rel) {
+  const d = p('.bludos', 'revisions', safeName(revKey(rel)));
+  if (!fs.existsSync(d)) return [];
+  return fs.readdirSync(d)
+    .filter((f) => f.endsWith('.md'))
+    .map((f) => {
+      const m = f.match(/^(\d+)-(.*)\.md$/);
+      return { file: f, when: m ? new Date(Number(m[1])).toISOString() : '', status: m ? m[2] : '' };
+    })
+    .sort((a, b) => b.file.localeCompare(a.file));
+}
+
+function readRevision(rel, file) {
+  const abs = path.join(p('.bludos', 'revisions', safeName(revKey(rel))), path.basename(file));
+  const g = matter(fs.readFileSync(abs, 'utf8'));
+  return { markdown: g.content, meta: g.data };
 }
 
 function renamePage(rel, newTitle) {
@@ -500,6 +530,181 @@ function search(q) {
     }
   }
   return results.sort((a, b) => b.score - a.score).slice(0, 50);
+}
+
+// ---------- blueprint mode (cyanotype render + title block + PDF) ----------
+
+function blueprintHtml(rel) {
+  const { mdToHtml } = require('./md2html.cjs');
+  const page = readPage(rel);
+  const meta = page.meta || {};
+  const parts = rel.split('/');
+  const tb = (l, v) => `<tr><td>${l}</td><td>${v || '—'}</td></tr>`;
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${page.title}</title><style>
+@page { size: A4; margin: 8mm; }
+body { background:#0e2a52; color:#eaf2ff; font-family:'Segoe UI',sans-serif; margin:0; }
+.bp { position:relative; min-height:275mm; border:2px solid #eaf2ff; outline:1px solid #eaf2ff; outline-offset:-6px;
+  padding:12mm 12mm 62mm; box-sizing:border-box;
+  background-image: linear-gradient(rgba(234,242,255,.08) 1px, transparent 1px), linear-gradient(90deg, rgba(234,242,255,.08) 1px, transparent 1px);
+  background-size: 10mm 10mm; }
+h1,h2,h3 { font-family:'Cascadia Mono',Consolas,monospace; text-transform:uppercase; letter-spacing:.08em; color:#fff; }
+h2 { border-bottom:1px solid rgba(234,242,255,.5); padding-bottom:4px; }
+table { border-collapse:collapse; width:100%; margin:10px 0; font-size:11.5px; }
+th,td { border:1px solid rgba(234,242,255,.6); padding:5px 8px; text-align:left; }
+th { font-family:Consolas,monospace; text-transform:uppercase; font-size:9.5px; letter-spacing:.08em; }
+code { border:1px solid rgba(234,242,255,.5); padding:1px 5px; font-size:11px; font-family:Consolas,monospace; }
+blockquote { border-left:3px solid #eaf2ff; margin-left:0; padding-left:12px; }
+.task{margin:2px 0}.task.done{opacity:.6;text-decoration:line-through}.box{margin-right:6px}
+a { color:#bcd8ff } img { max-width:100% } hr { border:none; border-top:1px dashed rgba(234,242,255,.5); }
+.bp-head { display:flex; justify-content:space-between; font-family:Consolas,monospace; font-size:10px;
+  letter-spacing:.24em; border-bottom:2px solid #eaf2ff; padding-bottom:6px; margin-bottom:8mm; }
+.titleblock { position:absolute; right:10mm; bottom:10mm; width:96mm; border:2px solid #eaf2ff; background:#0e2a52; }
+.titleblock table { margin:0; font-size:9.5px; }
+.titleblock td { border:1px solid rgba(234,242,255,.6); padding:3px 6px; font-family:Consolas,monospace; }
+.titleblock td:first-child { width:32mm; text-transform:uppercase; letter-spacing:.08em; opacity:.75; }
+</style></head><body><div class="bp">
+<div class="bp-head"><span>BLUDOS ◆ BLUEPRINT</span><span>${meta.doc || ''}</span></div>
+${mdToHtml(page.markdown)}
+<div class="titleblock"><table>
+${tb('Title', page.title)}${tb('Doc №', meta.doc)}${tb('Project', parts[0])}
+${tb('Phase', parts.length >= 3 ? parts[1] : '(unfiled)')}${tb('Status / Rev', meta.status || 'Draft')}
+${tb('Author', meta.author)}${tb('Updated', String(meta.updated || '').slice(0, 10))}
+</table></div></div></body></html>`;
+}
+
+async function blueprintPdf(rel, destOverride) {
+  const { BrowserWindow, dialog } = require('electron');
+  let dest = destOverride;
+  if (!dest) {
+    const res = await dialog.showSaveDialog({
+      title: 'Save blueprint PDF',
+      defaultPath: path.basename(rel, '.md') + ' — blueprint.pdf',
+      filters: [{ name: 'PDF', extensions: ['pdf'] }],
+    });
+    if (res.canceled || !res.filePath) return { ok: false, canceled: true };
+    dest = res.filePath;
+  }
+  const tmp = p('.bludos', 'blueprint-tmp.html');
+  fs.writeFileSync(tmp, blueprintHtml(rel));
+  const win = new BrowserWindow({ show: false });
+  try {
+    await win.loadFile(tmp);
+    const pdf = await win.webContents.printToPDF({ printBackground: true, pageSize: 'A4' });
+    fs.writeFileSync(dest, pdf);
+  } finally {
+    win.destroy();
+    try { fs.unlinkSync(tmp); } catch { /* ignore */ }
+  }
+  if (!destOverride) shell.openPath(dest);
+  return { ok: true, dest };
+}
+
+// ---------- gate room (program dashboard derived from checklists) ----------
+
+function gatesSummary() {
+  const tree = getTree();
+  return tree.projects.map((proj) => ({
+    name: proj.name,
+    phases: proj.folders.filter((f) => !f.virtual).map((f) => {
+      let done = 0, todo = 0;
+      const statuses = {};
+      for (const pg of f.pages) {
+        try {
+          const raw = fs.readFileSync(resolveRel(pg.rel), 'utf8');
+          done += (raw.match(/- \[x\]/gi) || []).length;
+          todo += (raw.match(/- \[ \]/g) || []).length;
+          const st = (matter(raw).data || {}).status || 'Draft';
+          statuses[st] = (statuses[st] || 0) + 1;
+        } catch { /* unreadable page */ }
+      }
+      return { name: f.name, custom: !!f.custom, pages: f.pages.length, done, todo, statuses, firstRel: f.pages[0] ? f.pages[0].rel : null };
+    }),
+  }));
+}
+
+// ---------- tamper-evident lab notebook ----------
+// Creating today's log seals the previous log: its SHA-256 goes into an
+// append-only chain file, and the new log opens citing that hash.
+
+function todayLog(project, dateStr) {
+  const date = dateStr || new Date().toISOString().slice(0, 10);
+  const title = 'LOG ' + date;
+  const folder = 'Living Docs';
+  const dir = p(safeName(project), folder);
+  if (fs.existsSync(path.join(dir, title + '.md'))) {
+    return { rel: [safeName(project), folder, title + '.md'].join('/'), created: false };
+  }
+  const chainPath = p('.bludos', 'logchain.json');
+  const prevLogs = fs.existsSync(dir)
+    ? fs.readdirSync(dir).filter((f) => /^LOG \d{4}-\d{2}-\d{2}\.md$/.test(f)).sort()
+    : [];
+  let prevLine = 'GENESIS';
+  if (prevLogs.length) {
+    const prevFile = prevLogs[prevLogs.length - 1];
+    const hash = crypto.createHash('sha256').update(fs.readFileSync(path.join(dir, prevFile))).digest('hex');
+    const chain = readJson(chainPath, []);
+    chain.push({ project: safeName(project), file: prevFile, sha256: hash, sealed: new Date().toISOString() });
+    writeJson(chainPath, chain);
+    prevLine = prevFile.replace(/\.md$/, '') + ' · ' + hash.slice(0, 12);
+  }
+  const body = '`NOTEBOOK ▮ CHAIN PREV: ' + prevLine + '`\n\n## ' + date + '\n\n- ' + new Date().toTimeString().slice(0, 5) + ' — ';
+  const rel = createPage(project, folder, title, body);
+  return { rel, created: true };
+}
+
+function verifyLogChain() {
+  return readJson(p('.bludos', 'logchain.json'), []).map((e) => {
+    let ok = false, missing = false;
+    try {
+      ok = crypto.createHash('sha256').update(fs.readFileSync(p(e.project, 'Living Docs', e.file))).digest('hex') === e.sha256;
+    } catch { missing = true; }
+    return { ...e, ok, missing };
+  });
+}
+
+// ---------- archive contact sheet ----------
+
+async function contactSheet(ids, destOverride) {
+  const items = readJson(archiveIndexPath(), []).filter((a) => ids.includes(a.id));
+  if (!items.length) return { ok: false, error: 'No assets selected' };
+  let base = destOverride;
+  if (!base) {
+    const { dialog } = require('electron');
+    const res = await dialog.showOpenDialog({ title: 'Choose destination for the contact sheet', properties: ['openDirectory', 'createDirectory'] });
+    if (res.canceled || !res.filePaths[0]) return { ok: false, canceled: true };
+    base = res.filePaths[0];
+  }
+  const dir = path.join(base, 'Bludos Contact Sheet ' + new Date().toISOString().slice(0, 10));
+  fs.mkdirSync(path.join(dir, 'img'), { recursive: true });
+  const cards = items.map((a) => {
+    let src = '';
+    if (a.file && fs.existsSync(path.join(archiveDir(), a.file))) {
+      fs.copyFileSync(path.join(archiveDir(), a.file), path.join(dir, 'img', a.file));
+      src = 'img/' + a.file;
+    }
+    const thumb = a.kind === 'image' && src
+      ? `<img src="${src}">`
+      : `<div class="glyph">${(a.kind || 'file').toUpperCase()}</div>`;
+    return `<div class="card"><div class="code"><span>${(a.kind || 'file').toUpperCase()}</span><span>${String(a.added || '').slice(0, 10)}</span></div>
+${thumb}<div class="bar"></div><div class="nm">${a.name}</div><div class="tags">${(a.tags || []).join(' · ') || '—'}</div>
+${a.sourceUrl ? `<div class="tags">${a.sourceUrl}</div>` : ''}</div>`;
+  }).join('\n');
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>Bludos contact sheet</title><style>
+@page { size: A4 landscape; margin: 8mm; } body { background:#12151c; font-family:'Segoe UI',sans-serif; margin:0; padding:18px; }
+h1 { color:#dde3ee; font-family:Consolas,monospace; font-size:13px; letter-spacing:.2em; }
+.grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(180px,1fr)); gap:12px; }
+.card { background:#f1f0ea; color:#191b16; border:1px solid #8a93a3; padding:7px; page-break-inside:avoid; }
+.code { display:flex; justify-content:space-between; font-family:Consolas,monospace; font-size:8.5px; letter-spacing:.1em; color:#77796e; border-bottom:1px solid #d8d6cc; padding-bottom:4px; margin-bottom:6px; }
+img { width:100%; height:120px; object-fit:cover; border:1px solid #d8d6cc; }
+.glyph { height:120px; display:flex; align-items:center; justify-content:center; font-family:Consolas,monospace; font-weight:700; letter-spacing:.2em; background:#e9e8e0; border:1px solid #d8d6cc; }
+.bar { height:10px; margin:6px 0 4px; background:repeating-linear-gradient(90deg,#191b16 0 1px,transparent 1px 4px,#191b16 4px 6px,transparent 6px 9px); opacity:.75; }
+.nm { font-size:11px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.tags { font-family:Consolas,monospace; font-size:8.5px; color:#77796e; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+</style></head><body><h1>BLU_DOS ▮ CONTACT SHEET · ${items.length} ASSETS · ${new Date().toISOString().slice(0, 10)}</h1>
+<div class="grid">${cards}</div></body></html>`;
+  fs.writeFileSync(path.join(dir, 'index.html'), html);
+  if (!destOverride) shell.openPath(path.join(dir, 'index.html'));
+  return { ok: true, dest: dir, count: items.length };
 }
 
 // ---------- page media (images pasted/dropped into documents) ----------
@@ -756,4 +961,6 @@ module.exports = {
   getConfig, setConfig, chooseWorkspace, reconcileArchive, openRoot,
   mediaSave, mediaImport, mediaPick,
   saveUserTemplate, listUserTemplates,
+  blueprintHtml, blueprintPdf, gatesSummary,
+  listRevisions, readRevision, todayLog, verifyLogChain, contactSheet,
 };

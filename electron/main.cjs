@@ -58,6 +58,14 @@ function registerIpc() {
     'media:pick': (e, rel) => ws.mediaPick(rel),
     'template:save-user': (e, rel) => ws.saveUserTemplate(rel),
     'templates:user': () => ws.listUserTemplates(),
+    'page:blueprint-html': (e, rel) => ws.blueprintHtml(rel),
+    'page:blueprint-pdf': (e, rel) => ws.blueprintPdf(rel),
+    'gates:summary': () => ws.gatesSummary(),
+    'page:revisions': (e, rel) => ws.listRevisions(rel),
+    'page:revision-read': (e, rel, file) => ws.readRevision(rel, file),
+    'log:today': (e, project) => ws.todayLog(project),
+    'log:verify': () => ws.verifyLogChain(),
+    'archive:contact-sheet': (e, ids) => ws.contactSheet(ids),
   };
   for (const [channel, fn] of Object.entries(handlers)) ipcMain.handle(channel, fn);
 }

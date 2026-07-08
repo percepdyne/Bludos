@@ -8,6 +8,7 @@ import PromptModal from './components/PromptModal.jsx';
 import QuickOpen from './components/QuickOpen.jsx';
 import Toolbox from './components/Toolbox.jsx';
 import SettingsModal from './components/SettingsModal.jsx';
+import GateRoom from './components/GateRoom.jsx';
 import TEMPLATE_PACKS from './templates.json';
 
 const invoke = (...a) => window.bludos.invoke(...a);
@@ -76,6 +77,21 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
+  // Ctrl+L — today's lab-notebook log (tamper-evident chain)
+  useEffect(() => {
+    const onKey = async (e) => {
+      if (!(e.ctrlKey || e.metaKey) || e.key !== 'l') return;
+      e.preventDefault();
+      const project = (view.type === 'page' && view.rel.split('/')[0]) || tree.projects[0]?.name;
+      if (!project) return;
+      const r = await invoke('log:today', project);
+      await refreshTree();
+      openPage(r.rel);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [view, tree, refreshTree]);
+
   const openPage = (rel) => {
     setView({ type: 'page', rel });
     setRecents((r) => {
@@ -129,6 +145,7 @@ export default function App() {
         onShowTemplatesAt={(project, folderName) => setShowTemplates({ project, folderName })}
         onShowArchive={() => setView({ type: 'archive' })}
         onShowTrash={() => setView({ type: 'trash' })}
+        onShowGates={() => setView({ type: 'gates' })}
         onShowToolbox={() => setToolboxOpen((v) => !v)}
         onShowSettings={() => setSettingsOpen(true)}
         onHome={() => setView({ type: 'home' })}
@@ -145,6 +162,7 @@ export default function App() {
         )}
         {view.type === 'archive' && <Archive />}
         {view.type === 'trash' && <Trash onRestored={refreshTree} />}
+        {view.type === 'gates' && <GateRoom onOpenPage={openPage} />}
         {view.type === 'home' && (
           <Home tree={tree} info={info} onNewProject={newProject} onShowTemplates={() => setShowTemplates({})} />
         )}

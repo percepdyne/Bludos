@@ -7,10 +7,15 @@ const os = require('os');
 const path = require('path');
 const ws = require('../electron/workspace.cjs');
 
+// blueprintPdf opens+destroys a hidden BrowserWindow; without this listener
+// Electron's default "quit when all windows close" would end the suite early.
+app.on('window-all-closed', () => { /* keep running */ });
+
 app.whenReady().then(async () => {
   const name = 'Smoke Test ' + Date.now();
   const runStart = new Date().toISOString();
   let prevCfg = {};
+  let docId = '';
   try {
     ws.initWorkspace();
     prevCfg = ws.getConfig();
@@ -35,6 +40,7 @@ app.whenReady().then(async () => {
     assert(page.markdown.includes('anodization'), 'page content roundtrip');
     assert(page.meta.status === 'Draft', 'frontmatter status');
     assert(/^BLU-P01-[0-9A-Z]{6}$/.test(page.meta.doc), 'doc id generated: ' + page.meta.doc);
+    docId = page.meta.doc;
     assert(!page.markdown.includes('{{DOC}}') && !page.markdown.includes('{{DATE}}'), 'template tokens substituted');
     assert(page.meta.author === 'Auditor', 'author stamped from config');
 
@@ -114,6 +120,44 @@ app.whenReady().then(async () => {
     const rec = ws.archiveList().find((a) => a.name === 'reconcile-test.txt');
     assert(rec, 'externally added archive file reconciled into index');
 
+    // --- Blueprint mode: HTML + headless PDF ---
+    const bph = ws.blueprintHtml(restored.rel);
+    assert(bph.includes('titleblock') && bph.includes(page.meta.doc), 'blueprint html has title block + doc id');
+    const bpDest = path.join(os.tmpdir(), 'bludos-bp-' + Date.now() + '.pdf');
+    const bp = await ws.blueprintPdf(restored.rel, bpDest);
+    assert(bp.ok && fs.readFileSync(bpDest).slice(0, 4).toString() === '%PDF', 'blueprint pdf rendered');
+    fs.unlinkSync(bpDest);
+
+    // --- Gate Room summary counts checklist state ---
+    const gproj = ws.gatesSummary().find((p2) => p2.name === name);
+    const ph01 = gproj.phases.find((f) => f.name.startsWith('01'));
+    assert(ph01 && ph01.pages >= 1 && ph01.done >= 1 && ph01.todo >= 1, 'gate summary checklist counts wrong: ' + JSON.stringify(ph01));
+
+    // --- Revision vault: snapshots on status change ---
+    ws.setStatus(restored.rel, 'Approved'); // second transition (first was In Review)
+    const revs = ws.listRevisions(restored.rel);
+    assert(revs.length >= 2, 'expected >=2 revisions, got ' + revs.length);
+    assert(ws.readRevision(restored.rel, revs[0].file).markdown.includes('anodization'), 'revision content readable');
+
+    // --- Lab notebook: chain seal + tamper detection ---
+    const l1 = ws.todayLog(name, '2020-01-01');
+    assert(l1.created, 'log day1 created');
+    ws.writePage(l1.rel, ws.readPage(l1.rel).markdown + '\n- 10:00 — tested actuator');
+    const l2 = ws.todayLog(name, '2020-01-02');
+    assert(l2.created && ws.readPage(l2.rel).markdown.includes('CHAIN PREV: LOG 2020-01-01'), 'day2 cites day1 hash');
+    let chain = ws.verifyLogChain().filter((c) => c.project === name);
+    assert(chain.length === 1 && chain[0].ok, 'day1 sealed and verified');
+    fs.appendFileSync(path.join(ws.info().root, name, 'Living Docs', 'LOG 2020-01-01.md'), 'tampered');
+    chain = ws.verifyLogChain().filter((c) => c.project === name);
+    assert(chain.length === 1 && chain[0].ok === false, 'tampering not detected');
+
+    // --- Contact sheet ---
+    const csBase = fs.mkdtempSync(path.join(os.tmpdir(), 'bludos-cs-'));
+    const cs = await ws.contactSheet([restoredAsset.id], csBase);
+    assert(cs.ok && cs.count === 1, 'contact sheet failed: ' + JSON.stringify(cs));
+    assert(fs.existsSync(path.join(cs.dest, 'index.html')) && fs.existsSync(path.join(cs.dest, 'img', restoredAsset.file)), 'sheet html/asset missing');
+    fs.rmSync(csBase, { recursive: true, force: true });
+
     // --- Teams share against local mock ---
     const prevWebhook = ws.getSettings().teamsWebhookUrl || '';
     const received = [];
@@ -176,6 +220,13 @@ app.whenReady().then(async () => {
         }
       }
       fs.rmSync(path.join(root, name), { recursive: true, force: true });
+      // purge test entries from the log chain and revision vault
+      const chainPath = path.join(root, '.bludos', 'logchain.json');
+      if (fs.existsSync(chainPath)) {
+        const c = JSON.parse(fs.readFileSync(chainPath, 'utf8')).filter((e) => e.project !== name);
+        fs.writeFileSync(chainPath, JSON.stringify(c, null, 2));
+      }
+      if (docId) { try { fs.rmSync(path.join(root, '.bludos', 'revisions', docId), { recursive: true, force: true }); } catch { /* ignore */ } }
       ws.setConfig({ userName: prevCfg.userName || '' });
     } catch (e) { console.error('cleanup issue:', e.message); }
     app.quit();

@@ -68,6 +68,10 @@ export default function Archive() {
           />
           <button onClick={addUrl}>+ Link</button>
         </div>
+        <button
+          title="Export the assets currently shown as a printable contact sheet"
+          onClick={() => shown.length && invoke('archive:contact-sheet', shown.map((a) => a.id))}
+        >⎙ SHEET</button>
       </header>
       <p className="archive-hint">Drop images, PDFs, CAD files — anything — anywhere on this view to archive it.</p>
       <div className="grid">

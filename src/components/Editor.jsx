@@ -12,6 +12,7 @@ import TableHeader from '@tiptap/extension-table-header';
 import Placeholder from '@tiptap/extension-placeholder';
 import { Markdown } from 'tiptap-markdown';
 import PromptModal from './PromptModal.jsx';
+import { BlueprintModal, TagModal, RevisionsModal } from './DocModals.jsx';
 
 const invoke = (...a) => window.bludos.invoke(...a);
 
@@ -42,6 +43,7 @@ export default function Editor({ rel, onRenamed }) {
   const [shareErr, setShareErr] = useState('');
   const [webhookModal, setWebhookModal] = useState(null); // null | { initial, thenShare }
   const [tplSaved, setTplSaved] = useState(false);
+  const [docModal, setDocModal] = useState(null); // null | 'blueprint' | 'tag' | 'revs'
   const loaded = useRef(false);
   const dirty = useRef(false);
   const saveTimer = useRef();
@@ -248,6 +250,9 @@ export default function Editor({ rel, onRenamed }) {
           </select>
           <span className="save-state">{saved ? 'Saved' : 'Saving…'}</span>
           {shareState === 'err' && <span className="share-err" title={shareErr}>Share failed: {shareErr}</span>}
+          <button className="tb" title="Blueprint mode — cyanotype render + PDF" onClick={async () => { await flushNow(); setDocModal('blueprint'); }}>▦</button>
+          <button className="tb" title="Print a QR sample tag for the physical thing" onClick={() => setDocModal('tag')}>▩</button>
+          <button className="tb" title="Revision vault (snapshots on status change)" onClick={() => setDocModal('revs')}>☰</button>
           <button className="share-btn" onClick={saveAsTemplate} title="Save this page as a reusable template">
             {tplSaved ? 'Template ✓' : '▤+ Template'}
           </button>
@@ -257,6 +262,11 @@ export default function Editor({ rel, onRenamed }) {
           <button className="tb" title="Teams webhook settings" onClick={openWebhookSettings}>⚙</button>
         </div>
       </div>
+      {docModal === 'blueprint' && <BlueprintModal rel={rel} onClose={() => setDocModal(null)} />}
+      {docModal === 'tag' && <TagModal rel={rel} meta={meta} title={title} onClose={() => setDocModal(null)} />}
+      {docModal === 'revs' && (
+        <RevisionsModal rel={rel} onClose={() => setDocModal(null)} onRestored={(r) => { setDocModal(null); onRenamed(r); }} />
+      )}
       {webhookModal && (
         <PromptModal
           title="Microsoft Teams webhook"

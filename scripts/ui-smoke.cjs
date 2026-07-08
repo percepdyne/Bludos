@@ -152,6 +152,26 @@ app.whenReady().then(async () => {
       assert(g.markdown.includes('- [x]'), 'pre-rename dirty edit lost');
     });
 
+    await step('Blueprint Mode renders cyanotype with title block', async () => {
+      assert(await exec(`__click('.editor-meta .tb[title*="Blueprint"]')`), 'blueprint button missing');
+      await sleep(700);
+      assert(await exec(`__has('.bp-modal iframe')`), 'blueprint iframe missing');
+      const srcdoc = await exec(`document.querySelector('.bp-frame').getAttribute('srcdoc') || ''`);
+      assert(srcdoc.includes('titleblock') && srcdoc.includes('BLUEPRINT'), 'blueprint html incomplete');
+      await exec(`__click('.bp-modal .close'); true`);
+      await sleep(200);
+    });
+
+    await step('QR sample tag generates a scannable label', async () => {
+      assert(await exec(`__click('.editor-meta .tb[title*="QR sample"]')`), 'tag button missing');
+      const hasQr = await waitFor(async () =>
+        ((await exec(`(document.querySelector('.tag-frame') || { getAttribute() { return ''; } }).getAttribute('srcdoc') || ''`)) || '').includes('data:image')
+      );
+      assert(hasQr, 'QR data URL missing from label');
+      await exec(`__click('.tag-modal .close'); true`);
+      await sleep(200);
+    });
+
     await step('toolbox: battery calc inserts CALC block into the open document', async () => {
       assert(await exec(`__click('.sidebar-actions button', 'TOOLBOX')`), 'toolbox button missing');
       await sleep(300);
@@ -235,6 +255,23 @@ app.whenReady().then(async () => {
       console.log(`  · swept ${ids.length} tools, all computed clean`);
       await exec(`__click('.toolbox .close'); true`);
       await sleep(150);
+    });
+
+    await step('Ctrl+L opens today\'s lab-notebook log', async () => {
+      await exec(`window.dispatchEvent(new KeyboardEvent('keydown', { key: 'l', ctrlKey: true })); true`);
+      const today = new Date().toISOString().slice(0, 10);
+      const logAbs = path.join(ws.info().root, PROJECT, 'Living Docs', 'LOG ' + today + '.md');
+      assert(await waitFor(() => fs.existsSync(logAbs)), 'log file not created');
+      await sleep(500);
+      assert(await exec(`document.querySelector('.editor-title').value.startsWith('LOG ')`), 'log page not opened in editor');
+    });
+
+    await step('Gate Room dashboard renders program state', async () => {
+      assert(await exec(`__click('.sidebar-actions button', 'GATE ROOM')`), 'gate room button missing');
+      await sleep(600);
+      assert(await exec(`__has('.gateroom')`), 'gate room view missing');
+      assert(await exec(`document.querySelector('.gateroom').textContent.includes(${JSON.stringify(PROJECT)})`), 'fixture project missing');
+      assert(await exec(`__count('.gate-cell') >= 12`), 'phase cells missing');
     });
 
     await step('settings: accent switch applies instantly via data attribute', async () => {

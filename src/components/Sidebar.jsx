@@ -5,7 +5,7 @@ const invoke = (...a) => window.bludos.invoke(...a);
 export default function Sidebar({
   tree, activeRel, operator,
   onOpenPage, onNewPage, onTrashPage, onNewProject, onExportProject,
-  onShowTemplates, onShowTemplatesAt, onShowArchive, onShowTrash, onHome,
+  onShowTemplates, onShowTemplatesAt, onShowArchive, onShowTrash, onShowGates, onHome,
   onShowToolbox, onShowSettings, onSetOperator, onSwitchWorkspace,
 }) {
   const [q, setQ] = useState('');
@@ -140,7 +140,8 @@ export default function Sidebar({
         <button onClick={onShowTemplates}>▤ TEMPLATES</button>
         <button onClick={onShowArchive}>▣ ARCHIVE</button>
         <button onClick={onShowTrash} title="The Trench — nuked items rest here for 30 days">≋ TRENCH</button>
-        <button className="wide" onClick={onShowSettings}>⛭ SETTINGS</button>
+        <button onClick={onShowGates} title="Program dashboard — checklist completion per phase">◧ GATE ROOM</button>
+        <button onClick={onShowSettings}>⛭ SETTINGS</button>
         <button className="primary" onClick={onNewProject}>+ NEW PROJECT</button>
       </div>
     </aside>
