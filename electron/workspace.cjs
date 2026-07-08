@@ -487,6 +487,15 @@ function archiveRemove(id) {
   return archiveList();
 }
 
+function archiveReadB64(id) {
+  const a = readJson(archiveIndexPath(), []).find((x) => x.id === id);
+  if (!a || !a.file) return null;
+  const ext = path.extname(a.file).slice(1).toLowerCase();
+  const mime = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', bmp: 'image/bmp', svg: 'image/svg+xml' }[ext] || 'application/octet-stream';
+  try { return { mime, b64: fs.readFileSync(path.join(archiveDir(), a.file)).toString('base64') }; }
+  catch { return null; }
+}
+
 function archiveOpen(id) {
   const entry = readJson(archiveIndexPath(), []).find((x) => x.id === id);
   if (!entry) return false;
@@ -530,6 +539,50 @@ function search(q) {
     }
   }
   return results.sort((a, b) => b.score - a.score).slice(0, 50);
+}
+
+// ---------- wiki-links & backlinks ----------
+// [[Doc no or Title]] links pages. Resolution prefers exact doc id, then title.
+
+function allPagesFlat() {
+  const out = [];
+  for (const proj of getTree().projects) {
+    for (const folder of proj.folders) {
+      for (const pg of folder.pages) {
+        let doc = '';
+        try { doc = (matter(fs.readFileSync(resolveRel(pg.rel), 'utf8')).data || {}).doc || ''; } catch { /* skip */ }
+        out.push({ rel: pg.rel, title: pg.title, doc, project: proj.name });
+      }
+    }
+  }
+  return out;
+}
+
+function resolveWiki(target) {
+  const t = String(target).trim().toLowerCase();
+  const pages = allPagesFlat();
+  return (
+    pages.find((p) => p.doc && p.doc.toLowerCase() === t) ||
+    pages.find((p) => p.title.toLowerCase() === t) ||
+    pages.find((p) => p.title.toLowerCase().includes(t)) ||
+    null
+  );
+}
+
+function backlinks(rel) {
+  const me = allPagesFlat().find((p) => p.rel === rel);
+  if (!me) return [];
+  const targets = new Set([me.title.toLowerCase(), (me.doc || '').toLowerCase()].filter(Boolean));
+  const out = [];
+  for (const p of allPagesFlat()) {
+    if (p.rel === rel) continue;
+    let raw = '';
+    try { raw = fs.readFileSync(resolveRel(p.rel), 'utf8'); } catch { continue; }
+    for (const m of raw.matchAll(/\[\[([^\]]+)\]\]/g)) {
+      if (targets.has(m[1].trim().toLowerCase())) { out.push({ rel: p.rel, title: p.title, project: p.project }); break; }
+    }
+  }
+  return out;
 }
 
 // ---------- blueprint mode (cyanotype render + title block + PDF) ----------
@@ -961,6 +1014,7 @@ module.exports = {
   getConfig, setConfig, chooseWorkspace, reconcileArchive, openRoot,
   mediaSave, mediaImport, mediaPick,
   saveUserTemplate, listUserTemplates,
+  archiveReadB64, resolveWiki, backlinks, allPagesFlat,
   blueprintHtml, blueprintPdf, gatesSummary,
   listRevisions, readRevision, todayLog, verifyLogChain, contactSheet,
 };

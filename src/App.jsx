@@ -32,6 +32,7 @@ export default function App() {
   const [prompt, setPrompt] = useState(null);
   const [quickOpen, setQuickOpen] = useState(false);
   const [toolboxOpen, setToolboxOpen] = useState(false);
+  const [toolPrefill, setToolPrefill] = useState(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [recents, setRecents] = useState(loadRecents);
 
@@ -75,6 +76,16 @@ export default function App() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  // RECALC from a CALC block (or /calc slash) → open toolbox, prefilled if given
+  useEffect(() => {
+    const h = (e) => {
+      if (e.detail && e.detail.id) setToolPrefill({ id: e.detail.id, vals: e.detail.vals, nonce: Date.now() });
+      setToolboxOpen(true);
+    };
+    window.addEventListener('bludos:open-tool', h);
+    return () => window.removeEventListener('bludos:open-tool', h);
   }, []);
 
   // Ctrl+L — today's lab-notebook log (tamper-evident chain)
@@ -174,6 +185,7 @@ export default function App() {
           currentRel={view.type === 'page' ? view.rel : null}
           onClose={() => setToolboxOpen(false)}
           onSaveSettings={saveSettings}
+          prefill={toolPrefill}
         />
       )}
       {settingsOpen && (

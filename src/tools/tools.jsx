@@ -451,8 +451,11 @@ function Sus({ canInsert, operator }) {
 // Renders any spec from calcs.js: inputs (number/text/select) → live-computed
 // result rows → the same insert-as-block mechanic as the hand-built tools.
 
-function CalcTool({ spec, canInsert, operator }) {
-  const [vals, setVals] = useState(() => Object.fromEntries(spec.inputs.map((i) => [i.k, i.def ?? ''])));
+function CalcTool({ spec, canInsert, operator, initialVals }) {
+  const [vals, setVals] = useState(() => ({
+    ...Object.fromEntries(spec.inputs.map((i) => [i.k, i.def ?? ''])),
+    ...(initialVals || {}),
+  }));
   const set = (k, v) => setVals((o) => ({ ...o, [k]: v }));
 
   let rows;

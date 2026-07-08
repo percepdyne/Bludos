@@ -66,6 +66,10 @@ function registerIpc() {
     'log:today': (e, project) => ws.todayLog(project),
     'log:verify': () => ws.verifyLogChain(),
     'archive:contact-sheet': (e, ids) => ws.contactSheet(ids),
+    'archive:read-b64': (e, id) => ws.archiveReadB64(id),
+    'wiki:resolve': (e, target) => ws.resolveWiki(target),
+    'wiki:backlinks': (e, rel) => ws.backlinks(rel),
+    'wiki:pages': () => ws.allPagesFlat(),
   };
   for (const [channel, fn] of Object.entries(handlers)) ipcMain.handle(channel, fn);
 }

@@ -55,6 +55,17 @@ npm run dist     # build Windows installer + portable exe into release/
 - **Settings** — ⛭ consolidates operator profile, workspace switching, appearance (accent color: lime/cyan/amber; light/dark writing sheet), tool-pack toggles, integrations, and shortcuts.
 - **Full-text search**, **the Trench** (☢ Nuke sinks pages *and* archive assets for 30 days — ⚓ Salvage restores them), **Share to Teams** (Adaptive Card via Workflows webhook — configure in Settings ▸ Integrations).
 - **Data safety** — all app indexes are written atomically with `.bak` fallbacks; late autosaves can never resurrect renamed or trashed pages.
+- **Blueprint Mode** (▦ in the editor) — renders any page as a cyanotype A4 with an auto title block (doc №, project/phase, status, author, dates) and exports to PDF.
+- **QR sample tags** (▩) — print a 62×40 mm label (QR + doc № + title + rev) to stick on prototypes, CMF golden samples, and test units.
+- **Revision vault** (☰) — every status change snapshots the outgoing version (keyed by immutable doc №, so it survives renames); browse, view, restore-as-copy.
+- **Tamper-evident lab notebook** — Ctrl+L opens today's `LOG` page; creating a new day seals the previous day's SHA-256 into an append-only chain cited in the next log. Verify from Settings ▸ Data.
+- **Gate Room** (◧) — full-screen program dashboard: checklist completion bars, doc counts, and status chips across all 11 phases of every project.
+- **CSV → chart blocks** — drop a `.csv` onto a document to insert an SVG line chart plus a summary-stats block, stored as data-in-markdown.
+- **Live CALC blocks** — put the caret in any declarative calculator's `CALC ▮` block and hit **↻ RECALC** to reopen that tool prefilled with the block's inputs.
+- **Slash commands** — type `/` in the editor for headings, checklists, tables, date stamps, status/decision scaffolds, wiki-links, and the calculator toolbox.
+- **Wiki-links & backlinks** — `[[Doc № or Title]]` links pages (rename-proof via doc №); every page shows who links to it. Insert via `/link` or type `[[`.
+- **Search the archive by color** — dominant palettes are extracted per image; pick a color (screen eyedropper or hex) or click a card's swatch to filter inspiration by hue.
+- **Contact sheets** — export the filtered archive as a print-ready label-sheet PDF/HTML.
 
 ## Where your data lives
 

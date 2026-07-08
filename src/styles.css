@@ -594,6 +594,38 @@ select.status:hover { border-color: var(--lime); }
 }
 .gate-st.s-released { color: var(--lime); }
 
+/* ---------- feature batch B: csv charts, recalc, color search ---------- */
+
+.color-search { display: flex; align-items: center; gap: 4px; }
+.color-hex { width: 84px; font-family: var(--mono); text-transform: uppercase; }
+.card-palette { display: flex; gap: 3px; margin: 6px 2px 4px; }
+.pal-sw { width: 16px; height: 16px; border-radius: 2px; border: 1px solid rgba(0, 0, 0, 0.25); cursor: pointer; }
+.pal-sw:hover { outline: 2px solid var(--lime); }
+
+/* CSV charts render as inline images already; keep them crisp on the sheet */
+.ProseMirror img[src$=".svg"] { border: 1px solid var(--paper-line); background: #fff; }
+
+/* slash command menu */
+.slash-menu {
+  position: absolute; z-index: 40; background: var(--bg1); border: 1px solid var(--line-lit);
+  border-radius: 4px; box-shadow: 0 16px 50px rgba(0, 0, 0, 0.6); width: 320px; max-height: 300px; overflow-y: auto;
+}
+.slash-item { padding: 8px 12px; cursor: pointer; display: flex; gap: 10px; align-items: baseline; }
+.slash-item.active, .slash-item:hover { background: var(--lime); color: var(--lime-ink); }
+.slash-item-key { font-family: var(--mono); font-size: 9px; color: var(--mut); }
+.slash-item.active .slash-item-key { color: var(--lime-ink); }
+.slash-item-title { font-size: 13px; font-weight: 600; }
+.slash-item-desc { font-size: 11px; color: var(--mut); margin-left: auto; }
+.slash-item.active .slash-item-desc { color: var(--lime-ink); }
+
+/* wiki backlinks panel under the editor */
+.backlinks { max-width: 900px; margin: 24px auto 0; border-top: 1px dashed var(--line); padding-top: 12px; }
+.backlinks-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.12em; color: var(--mut); }
+.backlink { display: block; padding: 5px 8px; margin-top: 4px; border-left: 2px solid var(--cyan); background: var(--bg1); border-radius: 2px; cursor: pointer; color: var(--txt); font-size: 13px; }
+.backlink:hover { background: var(--bg2); }
+.wikilink { color: var(--cyan); cursor: pointer; text-decoration: underline dotted; }
+.wikilink.dangling { color: var(--red); }
+
 /* scrollbars */
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-track { background: transparent; }

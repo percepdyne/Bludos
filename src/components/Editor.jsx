@@ -13,6 +13,9 @@ import Placeholder from '@tiptap/extension-placeholder';
 import { Markdown } from 'tiptap-markdown';
 import PromptModal from './PromptModal.jsx';
 import { BlueprintModal, TagModal, RevisionsModal } from './DocModals.jsx';
+import { csvChart, chartBlock } from '../tools/chart.js';
+import { CALC_SPECS } from '../tools/calcs.js';
+import { WikiLink, SLASH_COMMANDS } from '../tools/editor-ext.js';
 
 const invoke = (...a) => window.bludos.invoke(...a);
 
@@ -44,6 +47,9 @@ export default function Editor({ rel, onRenamed }) {
   const [webhookModal, setWebhookModal] = useState(null); // null | { initial, thenShare }
   const [tplSaved, setTplSaved] = useState(false);
   const [docModal, setDocModal] = useState(null); // null | 'blueprint' | 'tag' | 'revs'
+  const [slash, setSlash] = useState(null); // { items, index, coords }
+  const [backlinks, setBacklinks] = useState([]);
+  const [, setSelTick] = useState(0); // bumped on caret move so RECALC re-evaluates
   const loaded = useRef(false);
   const dirty = useRef(false);
   const saveTimer = useRef();
@@ -66,8 +72,9 @@ export default function Editor({ rel, onRenamed }) {
       TableRow,
       TableCell,
       TableHeader,
-      Placeholder.configure({ placeholder: 'Write, paste an image, or insert a template…' }),
+      Placeholder.configure({ placeholder: 'Write, paste an image, or type / for commands…' }),
       Markdown.configure({ html: false, linkify: true }),
+      WikiLink,
     ],
     editorProps: {
       handlePaste(view, event) {
@@ -84,8 +91,10 @@ export default function Editor({ rel, onRenamed }) {
       },
       handleDrop(view, event, slice, moved) {
         if (moved) return false;
-        const files = [...(event.dataTransfer?.files || [])].filter((f) => f.type.startsWith('image/'));
-        if (!files.length) return false;
+        const all = [...(event.dataTransfer?.files || [])];
+        const files = all.filter((f) => f.type.startsWith('image/'));
+        const csvs = all.filter((f) => /\.csv$/i.test(f.name));
+        if (!files.length && !csvs.length) return false;
         event.preventDefault();
         (async () => {
           for (const f of files) {
@@ -95,9 +104,22 @@ export default function Editor({ rel, onRenamed }) {
               : await invoke('media:save', rel, f.name, new Uint8Array(await f.arrayBuffer()));
             insertImageResult(r);
           }
+          // CSV → SVG chart into _media + stats block into the document
+          for (const f of csvs) {
+            const res = csvChart(await f.text(), f.name);
+            if (!res.ok) continue;
+            const r = await invoke('media:save', rel, f.name.replace(/\.csv$/i, '') + '.svg', new TextEncoder().encode(res.svg));
+            const ed = editorRef.current;
+            if (!ed || ed.isDestroyed) continue;
+            const md = `![${f.name}](${r.src})\n\n` + chartBlock(f.name, res.stats);
+            ed.commands.insertContentAt(ed.state.doc.content.size, '\n\n' + md + '\n');
+          }
         })();
         return true;
       },
+    },
+    onSelectionUpdate() {
+      setSelTick((t) => (t + 1) & 0xffff); // re-render so the RECALC button tracks the caret
     },
     onUpdate({ editor }) {
       if (!loaded.current) return;
@@ -128,6 +150,24 @@ export default function Editor({ rel, onRenamed }) {
       loaded.current = true;
     })();
     return () => { cancelled = true; };
+  }, [editor, rel]);
+
+  // backlinks: who links to this page
+  useEffect(() => { invoke('wiki:backlinks', rel).then(setBacklinks); }, [rel]);
+
+  // click a [[wiki-link]] in the rendered doc → navigate
+  useEffect(() => {
+    const dom = editor?.view?.dom;
+    if (!dom) return;
+    const onClick = async (e) => {
+      const t = e.target.closest('.wikilink');
+      if (!t) return;
+      e.preventDefault();
+      const hit = await invoke('wiki:resolve', t.dataset.target);
+      if (hit) onRenamed(hit.rel); // reuse the "navigate to rel" path
+    };
+    dom.addEventListener('click', onClick);
+    return () => dom.removeEventListener('click', onClick);
   }, [editor, rel]);
 
   // Flush unsaved edits when the page unmounts. page:write refuses to write to
@@ -217,6 +257,81 @@ export default function Editor({ rel, onRenamed }) {
   };
 
   if (!editor) return null;
+  window.__bludosEditor = editor; // test hook
+
+  // Live CALC blocks: when the caret sits inside a `CALC ▮ <tool-id>` block
+  // whose tool is declarative, offer to reopen the tool with those inputs.
+  const getCalcCtx = () => {
+    const { doc, selection } = editor.state;
+    // Snapshot every top-level node with its range and role.
+    const nodes = [];
+    doc.forEach((node, pos) => {
+      const m = node.type.name === 'paragraph' && node.textContent.match(/^CALC ▮ ([a-z0-9-]+)/);
+      nodes.push({ node, from: pos, to: pos + node.nodeSize, header: m ? m[1] : null, empty: node.textContent.trim() === '' });
+    });
+    const caret = selection.from;
+    const idx = nodes.findIndex((n) => caret >= n.from && caret <= n.to);
+    if (idx < 0) return null;
+    // A CALC block = a header paragraph + the next table (skipping blanks).
+    // Fire if the caret is in the header, in that table, or in a blank between.
+    for (let h = 0; h < nodes.length; h++) {
+      if (!nodes[h].header) continue;
+      let t = h + 1;
+      while (t < nodes.length && nodes[t].empty) t++;
+      if (t >= nodes.length || nodes[t].node.type.name !== 'table') continue;
+      if (idx < h || idx > t) continue;
+      const rows = [];
+      nodes[t].node.forEach((rowNode) => {
+        const cells = [];
+        rowNode.forEach((c) => cells.push(c.textContent.trim()));
+        if (cells.length >= 2) rows.push(cells);
+      });
+      return { id: nodes[h].header, rows };
+    }
+    return null;
+  };
+  const calcCtx = getCalcCtx();
+  const recalcSpec = calcCtx && CALC_SPECS.find((s) => calcCtx.id === s.id.split(' ')[0] || calcCtx.id === s.id);
+
+  const doRecalc = () => {
+    const vals = {};
+    for (const inp of recalcSpec.inputs) {
+      const row = calcCtx.rows.find((r) => r[0] === inp.label);
+      if (!row) continue;
+      let v = row[1];
+      if (inp.unit && v.endsWith(' ' + inp.unit)) v = v.slice(0, -(inp.unit.length + 1));
+      vals[inp.k] = v;
+    }
+    window.dispatchEvent(new CustomEvent('bludos:open-tool', { detail: { id: recalcSpec.id, vals } }));
+  };
+
+  // Slash menu: detect "/query" ending at the caret; filter commands.
+  const updateSlash = () => {
+    const { state } = editor;
+    const { from } = state.selection;
+    const before = state.doc.textBetween(Math.max(0, from - 24), from, '\n', '\n');
+    const m = before.match(/(?:^|\s)\/([a-z]*)$/i);
+    if (!m) { setSlash(null); return; }
+    const q = m[1].toLowerCase();
+    const items = SLASH_COMMANDS.filter((c) => (c.key + ' ' + c.title + ' ' + c.desc).toLowerCase().includes(q));
+    if (!items.length) { setSlash(null); return; }
+    const coords = editor.view.coordsAtPos(from);
+    setSlash({ items, index: 0, coords: { left: coords.left, top: coords.bottom }, qlen: m[1].length });
+  };
+
+  const runSlash = (cmd) => {
+    // delete the "/query" the user typed
+    const { from } = editor.state.selection;
+    editor.chain().focus().deleteRange({ from: from - (slash.qlen + 1), to: from }).run();
+    setSlash(null);
+    if (cmd.action === 'table') editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
+    else if (cmd.action === 'toolbox') window.dispatchEvent(new CustomEvent('bludos:open-tool', { detail: { open: true } }));
+    else {
+      const md = typeof cmd.md === 'function' ? cmd.md() : cmd.md;
+      editor.commands.insertContent(md);
+      if (cmd.key === 'link') editor.commands.setTextSelection(editor.state.selection.from - 2); // caret inside [[|]]
+    }
+  };
 
   const B = ({ action, active, label, children }) => (
     <button
@@ -301,6 +416,12 @@ export default function Editor({ rel, onRenamed }) {
         <B label="Insert image (or just paste / drop one)" action={async () => insertImageResult(await invoke('media:pick', rel))}>🖼</B>
         <B label="Insert table" action={() => c().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}>⊞</B>
         <B label="Divider" action={() => c().setHorizontalRule().run()}>—</B>
+        {recalcSpec && (
+          <>
+            <span className="tb-sep" />
+            <button className="tb on" title={`Reopen ${recalcSpec.title} with this block's inputs`} onMouseDown={(e) => { e.preventDefault(); doRecalc(); }}>↻ RECALC</button>
+          </>
+        )}
         {inTable && (
           <>
             <span className="tb-sep" />
@@ -313,7 +434,44 @@ export default function Editor({ rel, onRenamed }) {
           </>
         )}
       </div>
-      <EditorContent editor={editor} className="editor-body" />
+      <EditorContent
+        editor={editor}
+        className="editor-body"
+        onKeyUp={updateSlash}
+        onKeyDownCapture={(e) => {
+          if (!slash) return;
+          if (e.key === 'ArrowDown') { e.preventDefault(); setSlash((s) => ({ ...s, index: (s.index + 1) % s.items.length })); }
+          else if (e.key === 'ArrowUp') { e.preventDefault(); setSlash((s) => ({ ...s, index: (s.index - 1 + s.items.length) % s.items.length })); }
+          else if (e.key === 'Enter') { e.preventDefault(); runSlash(slash.items[slash.index]); }
+          else if (e.key === 'Escape') { e.preventDefault(); setSlash(null); }
+        }}
+      />
+      {slash && (
+        <div className="slash-menu" style={{ left: slash.coords.left, top: slash.coords.top }}>
+          {slash.items.map((c, i) => (
+            <div
+              key={c.key}
+              className={'slash-item' + (i === slash.index ? ' active' : '')}
+              onMouseEnter={() => setSlash((s) => ({ ...s, index: i }))}
+              onMouseDown={(e) => { e.preventDefault(); runSlash(c); }}
+            >
+              <span className="slash-item-key">/{c.key}</span>
+              <span className="slash-item-title">{c.title}</span>
+              <span className="slash-item-desc">{c.desc}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {backlinks.length > 0 && (
+        <div className="backlinks">
+          <div className="backlinks-label">◂ LINKED FROM ({backlinks.length})</div>
+          {backlinks.map((b) => (
+            <span key={b.rel} className="backlink" onClick={() => onRenamed(b.rel)}>
+              {b.title} <span className="muted">· {b.project}</span>
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

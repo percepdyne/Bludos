@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import OverlayViewer from './OverlayViewer.jsx';
+import { extractPalette, paletteMatches } from '../tools/palette.js';
 
 const invoke = (...a) => window.bludos.invoke(...a);
 
@@ -11,8 +12,31 @@ export default function Archive() {
   const [urlInput, setUrlInput] = useState('');
   const [dragging, setDragging] = useState(false);
   const [viewer, setViewer] = useState(null);
+  const [colorQuery, setColorQuery] = useState(''); // hex to match, '' = off
+  const palettes = useRef({}); // id -> [hex]
 
   useEffect(() => { invoke('archive:list').then(setItems); }, []);
+
+  // Extract dominant palettes for image assets once (needs base64 from disk —
+  // file:// URLs taint the canvas, so we read bytes through IPC).
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      for (const a of items) {
+        if (a.kind !== 'image' || palettes.current[a.id]) continue;
+        const data = await invoke('archive:read-b64', a.id);
+        if (cancelled || !data) continue;
+        palettes.current[a.id] = await extractPalette(`data:${data.mime};base64,${data.b64}`);
+      }
+      if (!cancelled) setItems((x) => [...x]); // repaint swatches
+    })();
+    return () => { cancelled = true; };
+  }, [items.length]);
+
+  const pickColor = async () => {
+    if (!window.EyeDropper) return;
+    try { const r = await new window.EyeDropper().open(); setColorQuery(r.sRGBHex.toUpperCase()); } catch { /* cancelled */ }
+  };
 
   const onDrop = async (e) => {
     e.preventDefault();
@@ -40,9 +64,11 @@ export default function Archive() {
   };
 
   const f = filter.trim().toLowerCase();
-  const shown = items.filter(
-    (a) => !f || (a.name + ' ' + (a.tags || []).join(' ')).toLowerCase().includes(f)
-  );
+  const shown = items.filter((a) => {
+    if (f && !(a.name + ' ' + (a.tags || []).join(' ')).toLowerCase().includes(f)) return false;
+    if (colorQuery && !paletteMatches(palettes.current[a.id], colorQuery)) return false;
+    return true;
+  });
 
   return (
     <div
@@ -59,6 +85,17 @@ export default function Archive() {
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
         />
+        <div className="color-search">
+          {window.EyeDropper && <button onClick={pickColor} title="Search archive by color (pick from screen)">⊙ COLOR</button>}
+          <input
+            className="color-hex"
+            placeholder="#hex"
+            value={colorQuery}
+            onChange={(e) => setColorQuery(e.target.value)}
+            style={colorQuery ? { borderColor: colorQuery, color: colorQuery } : null}
+          />
+          {colorQuery && <button className="mini-inline" title="Clear color filter" onClick={() => setColorQuery('')}>✕</button>}
+        </div>
         <div className="archive-url">
           <input
             placeholder="Paste an inspiration URL…"
@@ -87,6 +124,14 @@ export default function Archive() {
                 : <span className={'glyph g-' + a.kind}>{GLYPHS[a.kind] || GLYPHS.file}</span>}
             </div>
             <div className="card-barcode" />
+            {(palettes.current[a.id] || []).length > 0 && (
+              <div className="card-palette">
+                {palettes.current[a.id].map((h, k) => (
+                  <span key={k} className="pal-sw" style={{ background: h }} title={h}
+                    onClick={(e) => { e.stopPropagation(); setColorQuery(h); }} />
+                ))}
+              </div>
+            )}
             <div className="card-name" title={a.name}>{a.name}</div>
             <TagInput initial={(a.tags || []).join(', ')} onCommit={(v) => setTags(a.id, v)} />
             {a.kind === 'image' && (

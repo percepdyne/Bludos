@@ -1,13 +1,22 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { TOOL_PACKS } from '../tools/tools.jsx';
 
-export default function Toolbox({ settings, operator, currentRel, onClose, onSaveSettings }) {
+export default function Toolbox({ settings, operator, currentRel, onClose, onSaveSettings, prefill }) {
   const [toolId, setToolId] = useState(null);
   const [q, setQ] = useState('');
   const [collapsed, setCollapsed] = useState({});
   const [opened, setOpened] = useState({});     // lazy-mount memory — state survives back-nav
   const [resetKeys, setResetKeys] = useState({}); // bump to remount a tool at defaults
+  const [prefills, setPrefills] = useState({});  // { toolId: { vals, nonce } } from RECALC
   const searchRef = useRef(null);
+
+  // RECALC from a CALC block: open the tool remounted with those inputs
+  useEffect(() => {
+    if (!prefill) return;
+    setPrefills((m) => ({ ...m, [prefill.id]: { vals: prefill.vals, nonce: prefill.nonce } }));
+    setOpened((o) => ({ ...o, [prefill.id]: true }));
+    setToolId(prefill.id);
+  }, [prefill]);
 
   const enabled = (packId) => (settings.toolPacks ? settings.toolPacks[packId] !== false : true);
   const packs = TOOL_PACKS.filter((p) => enabled(p.id));
@@ -144,11 +153,11 @@ export default function Toolbox({ settings, operator, currentRel, onClose, onSav
             so entered values survive back-navigation. Reset = remount via key. */}
         {allTools.filter((t) => opened[t.id]).map((t) => (
           <div
-            key={t.id + ':' + (resetKeys[t.id] || 0)}
+            key={t.id + ':' + (resetKeys[t.id] || 0) + ':' + (prefills[t.id]?.nonce || 0)}
             data-tool={t.id}
             style={{ display: active && active.id === t.id ? 'block' : 'none' }}
           >
-            <t.component canInsert={canInsert} operator={operator} />
+            <t.component canInsert={canInsert} operator={operator} initialVals={prefills[t.id]?.vals} />
           </div>
         ))}
       </div>

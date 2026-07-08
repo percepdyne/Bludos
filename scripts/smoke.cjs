@@ -151,6 +151,19 @@ app.whenReady().then(async () => {
     chain = ws.verifyLogChain().filter((c) => c.project === name);
     assert(chain.length === 1 && chain[0].ok === false, 'tampering not detected');
 
+    // --- Wiki-links & backlinks ---
+    const linker = ws.createPage(name, '00 Strategy & Systems Architecture', 'Linker', 'See [[PRD Smoke Renamed]] and [[' + docId + ']].');
+    const target = ws.backlinks(restored.rel);
+    assert(target.some((b) => b.rel === linker), 'backlink by title not found');
+    assert(ws.resolveWiki('PRD Smoke Renamed') && ws.resolveWiki('PRD Smoke Renamed').rel === restored.rel, 'wiki resolve by title');
+    assert(ws.resolveWiki(docId) && ws.resolveWiki(docId).rel === restored.rel, 'wiki resolve by doc id');
+    assert(ws.resolveWiki('no such page') === null, 'wiki resolve miss returns null');
+    ws.trashPage(linker);
+
+    // --- Archive base64 read (for color extraction) ---
+    const b64 = ws.archiveReadB64(restoredAsset.id);
+    assert(b64 === null || (b64 && typeof b64.b64 === 'string'), 'archiveReadB64 shape'); // md asset → text, still base64able
+
     // --- Contact sheet ---
     const csBase = fs.mkdtempSync(path.join(os.tmpdir(), 'bludos-cs-'));
     const cs = await ws.contactSheet([restoredAsset.id], csBase);

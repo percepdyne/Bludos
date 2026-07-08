@@ -257,6 +257,45 @@ app.whenReady().then(async () => {
       await sleep(150);
     });
 
+    await step('slash command inserts a checklist item', async () => {
+      // (IIFE-wrap injected multi-statement scripts so `const` doesn't leak to global scope)
+      await exec(`(() => { const ed = window.__bludosEditor; ed.commands.focus('end'); ed.commands.insertContent(' /todo'); })(); true`);
+      await sleep(150);
+      await exec(`document.querySelector('.ProseMirror').dispatchEvent(new KeyboardEvent('keyup', { key: 'o', bubbles: true })); true`);
+      await sleep(250);
+      assert(await exec(`__has('.slash-menu')`), 'slash menu did not open');
+      const firstTitle = await exec(`(document.querySelector('.slash-item.active .slash-item-title')||{}).textContent || ''`);
+      assert(/checklist/i.test(firstTitle), 'expected checklist first for /todo, got: ' + firstTitle);
+      await exec(`document.querySelector('.ProseMirror').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); true`);
+      await sleep(200);
+      assert(!(await exec(`__has('.slash-menu')`)), 'slash menu did not close after Enter');
+    });
+
+    await step('wiki-link [[…]] renders as a decorated span', async () => {
+      await exec(`(() => { const ed = window.__bludosEditor; ed.commands.focus('end'); ed.commands.insertContent('\\n\\nlink to [[Ghost Target]] here'); })(); true`);
+      await sleep(300);
+      assert(await exec(`__has('.ProseMirror .wikilink')`), 'wiki-link not decorated');
+      assert(await exec(`document.querySelector('.wikilink').dataset.target === 'Ghost Target'`), 'wiki-link target attr wrong');
+    });
+
+    await step('RECALC reopens a declarative CALC block with its inputs', async () => {
+      // the ohms-law block (declarative) was inserted into this page earlier
+      await exec(`(() => {
+        const ed = window.__bludosEditor;
+        let pos = null;
+        ed.state.doc.forEach((node, p) => { if (pos == null && node.textContent.includes('ohms-law')) pos = p; });
+        if (pos != null) ed.commands.setTextSelection(pos + 6);
+      })(); true`);
+      const hasBtn = await waitFor(async () =>
+        await exec(`[...document.querySelectorAll('.toolbar .tb')].some((b) => b.textContent.includes('RECALC'))`), 3000);
+      assert(hasBtn, 'RECALC button did not appear for the ohms-law block');
+      await exec(`[...document.querySelectorAll('.toolbar .tb')].find((b) => b.textContent.includes('RECALC')).dispatchEvent(new MouseEvent('mousedown', { bubbles: true })); true`);
+      await sleep(500);
+      assert(await exec(`(document.querySelector('[data-tool=ohms-law]')||{style:{}}).style.display === 'block'`), 'toolbox did not open ohms-law prefilled');
+      await exec(`__click('.toolbox .close'); true`);
+      await sleep(150);
+    });
+
     await step('Ctrl+L opens today\'s lab-notebook log', async () => {
       await exec(`window.dispatchEvent(new KeyboardEvent('keydown', { key: 'l', ctrlKey: true })); true`);
       const today = new Date().toISOString().slice(0, 10);
