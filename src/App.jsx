@@ -10,11 +10,9 @@ import Toolbox from './components/Toolbox.jsx';
 import SettingsModal from './components/SettingsModal.jsx';
 import GateRoom from './components/GateRoom.jsx';
 import RemindersView from './components/RemindersView.jsx';
-import ActivityView from './components/ActivityView.jsx';
+import ActivityHub from './components/ActivityHub.jsx';
 import MusicPlayer from './components/MusicPlayer.jsx';
 import Sketchbook from './components/Sketchbook.jsx';
-import HatcheryView from './components/HatcheryView.jsx';
-import DeckView from './components/DeckView.jsx';
 import TEMPLATE_PACKS from './templates.json';
 import { codename } from './tools/codename.js';
 import { setFeedbackEnabled, fb } from './tools/feedback.js';
@@ -60,8 +58,10 @@ export default function App() {
   // Appearance: accent + sheet applied as data attributes driving CSS variables
   useEffect(() => {
     const a = settings.appearance || {};
+    const theme = a.theme || 'dark';
+    document.documentElement.dataset.theme = theme;
     document.documentElement.dataset.accent = a.accent || 'lime';
-    document.documentElement.dataset.sheet = a.sheet || 'light';
+    document.documentElement.dataset.sheet = a.sheet || (theme === 'light' ? 'light' : 'light');
     setFeedbackEnabled(!!settings.feedbackSound);
   }, [settings]);
 
@@ -195,11 +195,10 @@ export default function App() {
         onShowGates={() => setView({ type: 'gates' })}
         onShowToolbox={() => setToolboxOpen((v) => !v)}
         onShowSettings={() => setSettingsOpen(true)}
-        onShowActivity={() => setView({ type: 'activity' })}
+        onShowActivity={() => setView({ type: 'activity', tab: 'heatmap' })}
         onShowPlayer={() => setPlayerOpen((v) => !v)}
         onShowSketch={() => setView({ type: 'sketch' })}
-        onShowHatchery={() => setView({ type: 'hatchery' })}
-        onShowDeck={() => setView({ type: 'deck' })}
+        onShowHatchery={() => setView({ type: 'activity', tab: 'hatchery' })}
         onShowReminders={() => setView({ type: 'reminders' })}
         hatcheryOn={settings.hatcheryEnabled !== false}
         overdue={overdue}
@@ -219,10 +218,10 @@ export default function App() {
         {view.type === 'trash' && <Trash onRestored={refreshTree} />}
         {view.type === 'gates' && <GateRoom onOpenPage={openPage} />}
         {view.type === 'reminders' && <RemindersView onOpenPage={openPage} onChanged={refreshOverdue} />}
-        {view.type === 'activity' && <ActivityView />}
+        {view.type === 'activity' && (
+          <ActivityHub initialTab={view.tab} hatcheryOn={settings.hatcheryEnabled !== false} onChanged={refreshTree} />
+        )}
         {view.type === 'sketch' && <Sketchbook projects={tree.projects.map((p) => p.name)} />}
-        {view.type === 'hatchery' && <HatcheryView onChanged={refreshTree} />}
-        {view.type === 'deck' && <DeckView />}
         {view.type === 'home' && (
           <Home tree={tree} info={info} onNewProject={newProject} onOpenProject={(name) => {
             const proj = tree.projects.find((p) => p.name === name);
@@ -233,11 +232,17 @@ export default function App() {
       </main>
       {booting && (
         <div className="boot" onClick={() => setBooting(false)}>
-          <div className="boot-inner">
-            <div className="boot-mark">◆</div>
-            <div className="boot-title">BLUDOS</div>
-            <div className="boot-line">SYSTEM ONLINE · BLUE DOSSIER</div>
+          <div className="boot-card">
+            <div className="boot-card-top"><span>BLU_DOS // SYSTEM</span><span>CLASS: INTERNAL</span></div>
+            <div className="barcode" />
+            <div className="boot-title-row">
+              <span className="boot-mark">◆</span>
+              <h1>BLUDOS</h1>
+              <div className="boot-sub">BLUE DOSSIER — LOCAL DESIGN DOCUMENTATION SYSTEM</div>
+            </div>
+            <div className="boot-line">SYSTEM ONLINE</div>
             <div className="boot-bar"><div className="boot-bar-fill" /></div>
+            <div className="boot-card-foot"><span>EST. 2026</span><span>REV C.0 · CLICK TO SKIP</span></div>
           </div>
         </div>
       )}

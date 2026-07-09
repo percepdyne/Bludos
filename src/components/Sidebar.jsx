@@ -30,8 +30,15 @@ export default function Sidebar({
 
   return (
     <aside className="sidebar">
-      <div className="brand" onClick={onHome} title="Home">
-        <div className="brand-row"><span className="brand-mark">◆</span> BLUDOS</div>
+      <div className="brand">
+        <div className="brand-row" onClick={onHome} title="Home">
+          <span className="brand-mark">◆</span> BLUDOS
+          <button
+            className={'brand-bell' + (overdue ? ' has-badge' : '')}
+            title="Reminders"
+            onClick={(e) => { e.stopPropagation(); onShowReminders(); }}
+          >🔔{overdue ? <span className="rail-badge">{overdue}</span> : null}</button>
+        </div>
         <div className="brand-sub">BLUE DOSSIER // LOCAL SYSTEM</div>
       </div>
       <input
@@ -82,6 +89,7 @@ export default function Sidebar({
                     onClick={(e) => { e.stopPropagation(); onShowHatchery(); }}
                   >✓</button>
                 )}
+                {/* companion resolution lives in the Activity ▸ Hatchery tab */}
               </div>
               {open[proj.name] &&
                 proj.folders.map((folder) => {
@@ -145,22 +153,15 @@ export default function Sidebar({
         </div>
       </div>
       <div className="sidebar-actions">
-        <div className="action-rail">
-          <button onClick={onShowToolbox} title="Toolbox — 54 engineering tools">⚒</button>
-          <button onClick={onShowTemplates} title="Template library">▤</button>
-          <button onClick={onShowArchive} title="Archive">▣</button>
-          <button onClick={onShowGates} title="Gate Room — program dashboard">◧</button>
-          <button onClick={onShowActivity} title="Activity heatmap & streak">▓</button>
-          <button onClick={onShowPlayer} title="Player — offline music">♫</button>
-          <button onClick={onShowSketch} title="Sketchbook — draw with a stylus">✎</button>
-          <button onClick={onShowHatchery} title="Hatchery — project companions" style={hatcheryOn ? null : { display: 'none' }}>▦</button>
-          <button onClick={onShowDeck} title="Deck — achievement cards" style={hatcheryOn ? null : { display: 'none' }}>⬢</button>
-          <button onClick={onShowReminders} title="Reminders" className={overdue ? 'has-badge' : ''}>
-            🔔{overdue ? <span className="rail-badge">{overdue}</span> : null}
-          </button>
-          <button onClick={onShowTrash} title="The Trench — nuked items rest 30 days">≋</button>
-          <button onClick={onShowSettings} title="Settings">⛭</button>
-        </div>
+        <button onClick={onShowToolbox} title="Toolbox — 54 engineering tools">⚒ TOOLBOX</button>
+        <button onClick={onShowTemplates} title="Template library">▤ TEMPLATES</button>
+        <button onClick={onShowArchive} title="Archive">▣ ARCHIVE</button>
+        <button onClick={onShowGates} title="Gate Room — program dashboard">◧ GATE ROOM</button>
+        <button onClick={onShowActivity} title="Activity — heatmap, companions & deck">▓ ACTIVITY</button>
+        <button onClick={onShowPlayer} title="Player — offline music">♫ PLAYER</button>
+        <button onClick={onShowSketch} title="Sketchbook — draw with a stylus">✎ SKETCH</button>
+        <button onClick={onShowTrash} title="The Trench — nuked items rest 30 days">≋ TRENCH</button>
+        <button className="wide" onClick={onShowSettings} title="Settings">⛭ SETTINGS</button>
         <button className="primary" onClick={onNewProject}>+ NEW PROJECT</button>
       </div>
     </aside>

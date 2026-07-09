@@ -62,6 +62,16 @@ export default function SettingsModal({ settings, config, info, onClose, onSaveS
             )}
             {sec === 'Appearance' && (
               <>
+                <div className="col-label">THEME</div>
+                <p className="set-hint">Light or dark across the whole app — text and fluorescent icons adapt for readability in both.</p>
+                <div className="color-row">
+                  {['dark', 'light'].map((m) => (
+                    <button key={m}
+                      className={(appearance.theme || 'dark') === m ? 'primary' : ''}
+                      onClick={() => onSaveSettings({ appearance: { ...appearance, theme: m } })}
+                    >{m === 'dark' ? '◐ DARK' : '◑ LIGHT'}</button>
+                  ))}
+                </div>
                 <div className="col-label">ACCENT</div>
                 <div className="color-row">
                   {ACCENTS.map((a) => (

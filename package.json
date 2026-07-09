@@ -1,7 +1,7 @@
 {
   "name": "bludos",
   "productName": "Bludos",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "Bludos (blue dossier) — local-first design documentation & inspiration archive for product designers",
   "main": "electron/main.cjs",
   "scripts": {

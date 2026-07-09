@@ -91,7 +91,7 @@ app.whenReady().then(async () => {
     });
 
     await step('templates modal: packs, user badge column, rendered preview with real table', async () => {
-      assert(await exec(`__click('.action-rail button[title*="Template"]')`), 'templates button not found');
+      assert(await exec(`__click('.sidebar-actions button[title*="Template"]')`), 'templates button not found');
       await sleep(300);
       assert(await exec(`__has('.templates-modal')`), 'modal missing');
       assert(await exec(`__click('.pack', 'Risk & Reliability')`), 'method pack row missing');
@@ -175,7 +175,7 @@ app.whenReady().then(async () => {
     });
 
     await step('toolbox: battery calc inserts CALC block into the open document', async () => {
-      assert(await exec(`__click('.action-rail button[title*="Toolbox"]')`), 'toolbox button missing');
+      assert(await exec(`__click('.sidebar-actions button[title*="Toolbox"]')`), 'toolbox button missing');
       await sleep(300);
       assert(await exec(`__has('.toolbox')`), 'toolbox panel missing');
       const nTools = await exec(`__count('.tool-row')`);
@@ -201,7 +201,7 @@ app.whenReady().then(async () => {
     });
 
     await step('declarative tool (Ohm\'s Law) computes and inserts to disk', async () => {
-      assert(await exec(`__click('.action-rail button[title*="Toolbox"]')`), 'toolbox button missing');
+      assert(await exec(`__click('.sidebar-actions button[title*="Toolbox"]')`), 'toolbox button missing');
       await sleep(300);
       assert(await exec(`__click('.tool-row', "Ohm's Law")`), 'ohms-law tool row missing');
       await sleep(250);
@@ -217,7 +217,7 @@ app.whenReady().then(async () => {
     });
 
     await step('toolbox search filters, Enter opens first match, pin works', async () => {
-      assert(await exec(`__click('.action-rail button[title*="Toolbox"]')`), 'toolbox button missing');
+      assert(await exec(`__click('.sidebar-actions button[title*="Toolbox"]')`), 'toolbox button missing');
       await sleep(300);
       assert(await exec(`__has('.toolbox-search')`), 'search box missing');
       assert(await exec(`__setInput('.toolbox-search', 'ziegler')`), 'search not settable');
@@ -240,7 +240,7 @@ app.whenReady().then(async () => {
     });
 
     await step('all-tools sweep: every tool computes cleanly with defaults', async () => {
-      assert(await exec(`__click('.action-rail button[title*="Toolbox"]')`), 'toolbox button missing');
+      assert(await exec(`__click('.sidebar-actions button[title*="Toolbox"]')`), 'toolbox button missing');
       await sleep(300);
       const ids = await exec(`[...new Set([...document.querySelectorAll('.tool-row')].map((e) => e.dataset.tid))].filter(Boolean)`);
       assert(ids.length >= 50, `sweep found only ${ids.length} unique tools`);
@@ -308,7 +308,7 @@ app.whenReady().then(async () => {
     });
 
     await step('Gate Room dashboard renders program state', async () => {
-      assert(await exec(`__click('.action-rail button[title*="Gate Room"]')`), 'gate room button missing');
+      assert(await exec(`__click('.sidebar-actions button[title*="Gate Room"]')`), 'gate room button missing');
       await sleep(600);
       assert(await exec(`__has('.gateroom')`), 'gate room view missing');
       assert(await exec(`document.querySelector('.gateroom').textContent.includes(${JSON.stringify(PROJECT)})`), 'fixture project missing');
@@ -316,7 +316,7 @@ app.whenReady().then(async () => {
     });
 
     await step('settings: accent switch applies instantly via data attribute', async () => {
-      assert(await exec(`__click('.action-rail button[title*="Settings"]')`), 'settings button missing');
+      assert(await exec(`__click('.sidebar-actions button[title*="Settings"]')`), 'settings button missing');
       await sleep(300);
       assert(await exec(`__has('.settings-modal')`), 'settings modal missing');
       assert(await exec(`__click('.settings-nav-item', 'Appearance')`), 'appearance section missing');
@@ -331,14 +331,14 @@ app.whenReady().then(async () => {
     });
 
     await step('archive view renders label-sheet UI', async () => {
-      assert(await exec(`__click('.action-rail button[title*="Archive"]')`), 'archive button missing');
+      assert(await exec(`__click('.sidebar-actions button[title*="Archive"]')`), 'archive button missing');
       await sleep(400);
       assert(await exec(`__has('.archive')`), 'archive view missing');
       assert(await exec(`document.querySelector('.archive-head').textContent.includes('ARCHIVE_LOG')`), 'archive header missing');
     });
 
     await step('trench view renders (renamed trash)', async () => {
-      assert(await exec(`__click('.action-rail button[title*="Trench"]')`), 'trench button missing');
+      assert(await exec(`__click('.sidebar-actions button[title*="Trench"]')`), 'trench button missing');
       await sleep(400);
       assert(await exec(`__has('.trash')`), 'trench view missing');
       assert(await exec(`document.querySelector('.trash').textContent.includes('TRENCH_LOG')`), 'trench header missing');
@@ -388,14 +388,14 @@ app.whenReady().then(async () => {
     });
 
     await step('Activity heatmap renders with a streak', async () => {
-      assert(await exec(`__click('.action-rail button[title*="Activity"]')`), 'activity button missing');
+      assert(await exec(`__click('.sidebar-actions button[title*="Activity"]')`), 'activity button missing');
       await sleep(500);
       assert(await exec(`__has('.heatmap .heat-cell')`), 'heatmap cells missing');
       assert(await exec(`__count('.astat') === 3`), 'activity stats missing');
     });
 
     await step('Music player panel opens with a cassette', async () => {
-      assert(await exec(`__click('.action-rail button[title*="music"]')`), 'player button missing');
+      assert(await exec(`__click('.sidebar-actions button[title*="music"]')`), 'player button missing');
       await sleep(400);
       assert(await exec(`__has('.music-panel .cassette')`), 'cassette missing');
       assert(await exec(`__has('.player-controls .pc.big')`), 'play button missing');
@@ -404,18 +404,20 @@ app.whenReady().then(async () => {
     });
 
     await step('Sketchbook renders a canvas and tools', async () => {
-      assert(await exec(`__click('.action-rail button[title*="stylus"]')`), 'sketch button missing');
+      assert(await exec(`__click('.sidebar-actions button[title*="stylus"]')`), 'sketch button missing');
       await sleep(400);
       assert(await exec(`__has('.sketch-canvas')`), 'sketch canvas missing');
       assert(await exec(`__count('.sketch-colors .sw') >= 5`), 'color swatches missing');
     });
 
-    await step('Hatchery shows the project companion; complete → card', async () => {
-      assert(await exec(`__click('.action-rail button[title*="companion"]')`), 'hatchery button missing');
-      await sleep(500);
+    await step('Activity hub → Hatchery tab: companion shown; complete → card', async () => {
+      assert(await exec(`__click('.sidebar-actions button[title*="Activity"]')`), 'activity button missing');
+      await sleep(400);
+      assert(await exec(`__has('.hub-tabs')`), 'activity hub tabs missing');
+      assert(await exec(`__click('.hub-tab', 'HATCHERY')`), 'hatchery tab missing');
+      await sleep(400);
       assert(await exec(`__has('.hatchery .pet-card')`), 'no pet card for the project');
       assert(await exec(`__has('.pet-card svg.pet-art')`), 'pet art not rendered');
-      // open complete modal and mint a card
       assert(await exec(`__click('.pet-card .mini-full', 'Complete')`), 'complete button missing');
       await sleep(300);
       assert(await exec(`__has('.complete-modal')`), 'complete modal missing');
@@ -425,11 +427,25 @@ app.whenReady().then(async () => {
       assert(carded, 'card not minted to deck');
     });
 
-    await step('Deck shows the minted achievement card', async () => {
-      assert(await exec(`__click('.action-rail button[title*="achievement"]')`), 'deck button missing');
-      await sleep(500);
+    await step('Activity hub → Deck tab: minted card shows', async () => {
+      assert(await exec(`__click('.hub-tab', 'DECK')`), 'deck tab missing');
+      await sleep(400);
       assert(await exec(`__has('.card-deck .achievement')`), 'no achievement card rendered');
       assert(await exec(`document.querySelector('.deck').textContent.includes(${JSON.stringify(PROJECT)})`), 'card missing project name');
+    });
+
+    await step('theme switch to light applies data-theme', async () => {
+      assert(await exec(`__click('.sidebar-actions button[title*="Settings"]')`), 'settings button missing');
+      await sleep(250);
+      assert(await exec(`__click('.settings-nav-item', 'Appearance')`), 'appearance nav missing');
+      await sleep(150);
+      assert(await exec(`__click('.color-row button', 'LIGHT')`), 'light theme button missing');
+      await sleep(250);
+      assert((await exec(`document.documentElement.dataset.theme`)) === 'light', 'light theme not applied');
+      await exec(`[...document.querySelectorAll('.color-row button')].find(b=>b.textContent.includes('DARK')).click(); true`);
+      await sleep(200);
+      await exec(`__click('.settings-modal .close'); true`);
+      await sleep(150);
     });
 
     await step('no renderer console errors during the whole run', async () => {
