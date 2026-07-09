@@ -72,6 +72,13 @@ npm run dist     # build Windows installer + portable exe into release/
 - **Offline music player** (♫) — import MP3s (stored in-workspace, fully offline), playlists, shuffle/loop, a winding **cassette-tape** animation, and a WebAudio visualizer. Playback continues while you work.
 - **Sketchbook** (✎) — pressure-sensitive stylus canvas (great on a tablet); pen/marker/eraser, saves straight into the Archive.
 - **Companions & Deck** (▦ / ⬢) — a small SVG creature/specimen hatches with each new project and evolves through 5 stages as you document (the 5th, *Prime*, only for fast, efficient work); 8 species with a rare 8th, colour-keyed per project. On completion, keep up to 3 on display or mint them as achievement cards in your Deck. Fully optional — one toggle in Settings ▸ Companion.
+- **Stamp Kit + redaction** (◆) — draggable rubber stamps (APPROVED, DRAFT, CONFIDENTIAL, REVISED, ⚠ HOLD, dated approval with your name) and black redaction bars, laid over a page in a sidecar (the `.md` stays clean) and baked into Blueprint/exported copies — redactions go fully opaque only in the shared copy. Freehand doodle layer too.
+- **Completeness rings + health score** — every document shows a ring of how filled-in it is (checkboxes, table cells, blanks); the Gate Room rolls it into a per-project HEALTH % + letter grade.
+- **Focus / typewriter mode** (◎) — dims the chrome and adds an optional ambient noise bed for long writing sessions.
+- **Voice dictation** (🎤) — speak field notes; they transcribe into the document (Web Speech API).
+- **Tactile feedback** — optional synthesized clicks/thunks/chimes (checkbox ticks, Released stamp, archive drawer, 100%-filled chime), all procedurally generated (no audio files). Toggle in Settings ▸ Companion.
+- **Dossier shelf** — the home screen is a shelf of colour-keyed project folders, each with an auto **codename** (e.g. "IRON FALCON"). Click to open.
+- **Boot sequence** — a brief "SYSTEM ONLINE" splash on launch (skippable).
 
 ## Where your data lives
 

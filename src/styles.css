@@ -740,6 +740,94 @@ select.status:hover { border-color: var(--lime); }
 .ach-stats td { font-family: var(--mono); font-size: 10px; padding: 3px 6px; border: 1px solid var(--line); color: var(--txt); }
 .ach-stats td:first-child { color: var(--mut); width: 52%; }
 
+/* ============================================================
+   Batch: stamps/redaction, feedback, rings, focus, shelf, boot
+   ============================================================ */
+
+/* completeness ring in the editor header */
+.complete-ring { position: relative; display: inline-flex; align-items: center; justify-content: center; }
+.ring-pct { position: absolute; font-family: var(--mono); font-size: 8px; color: var(--txt); }
+
+/* focus / typewriter mode */
+body.focus-mode .sidebar,
+body.focus-mode .toolbar,
+body.focus-mode .editor-head { opacity: 0.12; transition: opacity 0.3s; }
+body.focus-mode .sidebar:hover,
+body.focus-mode .toolbar:hover,
+body.focus-mode .editor-head:hover { opacity: 1; }
+body.focus-mode .editor-body { box-shadow: 0 0 120px rgba(0, 0, 0, 0.7); }
+body.focus-mode .main { background: #05070a; }
+
+/* markup layer */
+.editor-sheet-wrap { position: relative; }
+.markup-layer { position: absolute; inset: 0; z-index: 4; pointer-events: none; }
+.markup-layer.active { pointer-events: auto; }
+.markup-layer.tool-redact { cursor: crosshair; }
+.markup-layer.tool-draw { cursor: crosshair; }
+.markup-svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.stamp {
+  position: absolute; border: 3px solid; border-radius: 4px; padding: 3px 11px;
+  font-family: var(--mono); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+  opacity: 0.82; font-size: 15px; white-space: nowrap; user-select: none;
+  background: rgba(255, 255, 255, 0.04); mix-blend-mode: multiply;
+}
+.stamp.grab { cursor: grab; }
+.redaction { position: absolute; background: #000; }
+.markup-layer.active .redaction { outline: 1px dashed rgba(255, 255, 255, 0.4); }
+.redaction.preview { opacity: 0.5; }
+.ov-del {
+  position: absolute; top: -9px; right: -9px; width: 16px; height: 16px; border-radius: 50%;
+  border: none; background: var(--red); color: #fff; font-size: 9px; padding: 0; line-height: 1;
+}
+.markup-toolbar {
+  position: sticky; top: 44px; z-index: 6; display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  background: var(--bg2); border: 1px solid var(--line-lit); border-radius: 4px; padding: 6px 8px; margin-bottom: 8px;
+}
+.stamp-palette { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.stamp-pick { font-family: var(--mono); font-size: 9px; padding: 2px 6px; border: 1px solid; background: transparent; border-radius: 3px; font-weight: 700; }
+.stamp-pick.on { background: var(--bg0); }
+
+/* dossier shelf home */
+.shelf-home { padding: 26px 34px 40px; min-height: 100%; display: flex; flex-direction: column; }
+.shelf-head { display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 2px solid var(--line); padding-bottom: 14px; margin-bottom: 22px; }
+.shelf-head .dossier-title h1 { margin: 4px 0 0; }
+.shelf { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 18px; align-content: start; flex: 1; }
+.folder { cursor: pointer; }
+.folder-tab { width: 64px; height: 14px; background: hsl(var(--fh, 210) 45% 42%); border-radius: 6px 10px 0 0; margin-left: 14px; }
+.folder-body {
+  position: relative; background: linear-gradient(160deg, hsl(var(--fh, 210) 42% 46%), hsl(var(--fh, 210) 45% 38%));
+  border: 1px solid rgba(0, 0, 0, 0.3); border-radius: 3px 8px 8px 8px; padding: 14px 14px 12px; min-height: 128px;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.4);
+}
+.folder:hover .folder-body { transform: translateY(-3px); transition: transform 0.15s; box-shadow: 0 16px 34px rgba(0, 0, 0, 0.5); }
+.folder-code { font-family: var(--mono); font-size: 10px; letter-spacing: 0.18em; color: rgba(255, 255, 255, 0.85); }
+.folder-name { font-weight: 700; color: #fff; margin: 6px 0 4px; font-size: 15px; }
+.folder-meta { font-family: var(--mono); font-size: 9px; letter-spacing: 0.12em; color: rgba(255, 255, 255, 0.7); }
+.folder-barcode { position: absolute; bottom: 10px; right: 12px; width: 60px; height: 16px; opacity: 0.5;
+  background: repeating-linear-gradient(90deg, #fff 0 1px, transparent 1px 3px, #fff 3px 5px, transparent 5px 8px); }
+.new-folder .folder-body { background: var(--bg1); border: 1px dashed var(--line-lit); display: flex; flex-direction: column; align-items: center; justify-content: center; box-shadow: none; }
+.new-folder .folder-tab { background: var(--line-lit); }
+.new-plus { font-size: 28px; color: var(--mut); }
+.shelf-foot { display: flex; justify-content: space-between; margin-top: 20px; padding-top: 12px; border-top: 1px solid var(--line); font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.1em; color: var(--mut); }
+
+/* gate room health badge */
+.gate-proj-name { display: flex; align-items: center; gap: 12px; }
+.health-badge { font-family: var(--mono); font-size: 9px; letter-spacing: 0.08em; padding: 2px 8px; border: 1px solid var(--line-lit); border-radius: 3px; color: var(--cyan); }
+.health-badge.g-A { color: var(--lime); border-color: var(--lime); }
+.health-badge.g-D, .health-badge.g-E { color: #e5843d; }
+
+/* boot sequence */
+.boot { position: fixed; inset: 0; z-index: 200; background: #05070a; display: flex; align-items: center; justify-content: center; animation: boot-out 0.4s ease 1.2s forwards; }
+.boot-inner { text-align: center; }
+.boot-mark { color: var(--lime); font-size: 40px; animation: boot-pulse 1s ease infinite; }
+.boot-title { font-family: var(--mono); letter-spacing: 0.5em; font-size: 34px; font-weight: 700; color: #fff; margin-top: 8px; }
+.boot-line { font-family: var(--mono); font-size: 10px; letter-spacing: 0.3em; color: var(--mut); margin-top: 8px; }
+.boot-bar { width: 220px; height: 3px; background: var(--bg2); margin: 18px auto 0; overflow: hidden; }
+.boot-bar-fill { height: 100%; width: 0; background: var(--lime); animation: boot-fill 1.3s ease forwards; }
+@keyframes boot-fill { to { width: 100%; } }
+@keyframes boot-pulse { 50% { opacity: 0.4; } }
+@keyframes boot-out { to { opacity: 0; visibility: hidden; } }
+
 /* scrollbars */
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-track { background: transparent; }

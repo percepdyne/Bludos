@@ -18,6 +18,9 @@ import { CALC_SPECS } from '../tools/calcs.js';
 import { WikiLink, SLASH_COMMANDS } from '../tools/editor-ext.js';
 import { timestampBlock, canonicalize, localIso, sha256Hex } from '../tools/notary.js';
 import ReminderModal from './ReminderModal.jsx';
+import MarkupLayer from './MarkupLayer.jsx';
+import { pageCompleteness } from '../tools/completeness.js';
+import { fb, startAmbient } from '../tools/feedback.js';
 
 const invoke = (...a) => window.bludos.invoke(...a);
 
@@ -52,7 +55,13 @@ export default function Editor({ rel, onRenamed }) {
   const [slash, setSlash] = useState(null); // { items, index, coords }
   const [backlinks, setBacklinks] = useState([]);
   const [reminderOpen, setReminderOpen] = useState(false);
+  const [markup, setMarkup] = useState(false);
+  const [focus, setFocus] = useState(false);
+  const [dictating, setDictating] = useState(false);
+  const [completeness, setCompleteness] = useState(100);
   const [, setSelTick] = useState(0); // bumped on caret move so RECALC re-evaluates
+  const recog = useRef(null);
+  const stopAmbient = useRef(null);
   const loaded = useRef(false);
   const dirty = useRef(false);
   const saveTimer = useRef();
@@ -128,6 +137,8 @@ export default function Editor({ rel, onRenamed }) {
       if (!loaded.current) return;
       dirty.current = true;
       setSaved(false);
+      const pct = pageCompleteness(editor.storage.markdown.getMarkdown()).pct;
+      setCompleteness((prev) => { if (pct === 100 && prev < 100) fb.chime(); return pct; });
       clearTimeout(saveTimer.current);
       saveTimer.current = setTimeout(async () => {
         await invoke('page:write', rel, editor.storage.markdown.getMarkdown());
@@ -150,10 +161,34 @@ export default function Editor({ rel, onRenamed }) {
       setMeta(page.meta || {});
       setTitle(page.title);
       editor.commands.setContent(page.markdown || '');
+      setCompleteness(pageCompleteness(page.markdown || '').pct);
       loaded.current = true;
     })();
     return () => { cancelled = true; };
   }, [editor, rel]);
+
+  // focus/typewriter mode: dim chrome + optional ambient bed
+  useEffect(() => {
+    document.body.classList.toggle('focus-mode', focus);
+    if (focus) { stopAmbient.current = startAmbient('noise'); }
+    else if (stopAmbient.current) { stopAmbient.current(); stopAmbient.current = null; }
+    return () => { if (stopAmbient.current) { stopAmbient.current(); stopAmbient.current = null; } };
+  }, [focus]);
+
+  const dictate = () => {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) { alert('Speech recognition is not available in this build.'); return; }
+    if (dictating) { recog.current?.stop(); return; }
+    const r = new SR();
+    r.continuous = true; r.interimResults = false; r.lang = 'en-US';
+    r.onresult = (e) => {
+      const txt = e.results[e.results.length - 1][0].transcript.trim();
+      editorRef.current?.commands.insertContent(txt + ' ');
+    };
+    r.onend = () => setDictating(false);
+    r.onerror = () => setDictating(false);
+    recog.current = r; r.start(); setDictating(true);
+  };
 
   // backlinks: who links to this page
   useEffect(() => { invoke('wiki:backlinks', rel).then(setBacklinks); }, [rel]);
@@ -169,8 +204,10 @@ export default function Editor({ rel, onRenamed }) {
       const hit = await invoke('wiki:resolve', t.dataset.target);
       if (hit) onRenamed(hit.rel); // reuse the "navigate to rel" path
     };
+    const onTick = (e) => { if (e.target.matches('input[type=checkbox]')) fb.tick(); };
     dom.addEventListener('click', onClick);
-    return () => dom.removeEventListener('click', onClick);
+    dom.addEventListener('click', onTick);
+    return () => { dom.removeEventListener('click', onClick); dom.removeEventListener('click', onTick); };
   }, [editor, rel]);
 
   // Flush unsaved edits when the page unmounts. page:write refuses to write to
@@ -226,6 +263,7 @@ export default function Editor({ rel, onRenamed }) {
   const setStatus = async (status) => {
     const data = await invoke('page:set-status', rel, status);
     setMeta(data || { ...meta, status });
+    if (status === 'Released') fb.thunk();
   };
 
   const notarize = async () => {
@@ -367,6 +405,14 @@ export default function Editor({ rel, onRenamed }) {
           onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
         />
         <div className="editor-meta">
+          <span className="complete-ring" title={`${completeness}% filled in`}>
+            <svg viewBox="0 0 36 36" width="28" height="28">
+              <circle cx="18" cy="18" r="15" fill="none" stroke="var(--line)" strokeWidth="4" />
+              <circle cx="18" cy="18" r="15" fill="none" stroke="var(--lime)" strokeWidth="4"
+                strokeDasharray={`${completeness * 0.942} 999`} strokeLinecap="round" transform="rotate(-90 18 18)" />
+            </svg>
+            <span className="ring-pct">{completeness}</span>
+          </span>
           {meta.doc && <span className="doc-chip">{meta.doc}</span>}
           <select
             className={'status s-' + String(meta.status || 'Draft').toLowerCase().replace(/\s/g, '-')}
@@ -378,6 +424,9 @@ export default function Editor({ rel, onRenamed }) {
           </select>
           <span className="save-state">{saved ? 'Saved' : 'Saving…'}</span>
           {shareState === 'err' && <span className="share-err" title={shareErr}>Share failed: {shareErr}</span>}
+          <button className={'tb' + (focus ? ' on' : '')} title="Focus / typewriter mode" onClick={() => setFocus((f) => !f)}>◎</button>
+          <button className={'tb' + (dictating ? ' on' : '')} title="Voice dictation" onClick={dictate}>{dictating ? '● REC' : '🎤'}</button>
+          <button className={'tb' + (markup ? ' on' : '')} title="Markup — stamps, redaction, doodles" onClick={() => setMarkup((m) => !m)}>◆</button>
           <button className="tb" title="Notarize — stamp a tamper-evident timestamp + content hash" onClick={notarize}>⏱</button>
           <button className="tb" title="Set a reminder about this document" onClick={() => setReminderOpen(true)}>🔔</button>
           <button className="tb" title="Blueprint mode — cyanotype render + PDF" onClick={async () => { await flushNow(); setDocModal('blueprint'); }}>▦</button>
@@ -452,6 +501,7 @@ export default function Editor({ rel, onRenamed }) {
           </>
         )}
       </div>
+      <div className="editor-sheet-wrap">
       <EditorContent
         editor={editor}
         className="editor-body"
@@ -464,6 +514,8 @@ export default function Editor({ rel, onRenamed }) {
           else if (e.key === 'Escape') { e.preventDefault(); setSlash(null); }
         }}
       />
+      <MarkupLayer rel={rel} active={markup} operator={meta.author || ''} />
+      </div>
       {slash && (
         <div className="slash-menu" style={{ left: slash.coords.left, top: slash.coords.top }}>
           {slash.items.map((c, i) => (

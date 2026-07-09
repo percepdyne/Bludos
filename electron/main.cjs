@@ -103,6 +103,8 @@ function registerIpc() {
     'pets:complete': (e, project, keep) => ws.completeProject(project, keep),
     'pets:retire': (e, project) => ws.retireKeptPet(project),
     'deck:list': () => ws.deckList(),
+    'overlay:read': (e, rel) => ws.readOverlay(rel),
+    'overlay:write': (e, rel, data) => ws.writeOverlay(rel, data),
   };
   for (const [channel, fn] of Object.entries(handlers)) ipcMain.handle(channel, fn);
 }

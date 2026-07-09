@@ -738,6 +738,50 @@ function deckList() {
   return readJson(deckPath(), []).sort((a, b) => String(b.completedAt).localeCompare(String(a.completedAt)));
 }
 
+// ---------- page markup overlays (stamps + redaction + doodles) ----------
+// Stored per page in a sidecar so the .md stays clean; coords are fractions
+// (0..1) of the sheet so they survive any resize. Baked into blueprint/export.
+
+function overlayKey(rel) {
+  try { return matter(fs.readFileSync(resolveRel(rel), 'utf8')).data.doc || rel.split('/').join('__'); }
+  catch { return rel.split('/').join('__'); }
+}
+function overlayPath(rel) {
+  const d = p('.bludos', 'overlays');
+  fs.mkdirSync(d, { recursive: true });
+  return path.join(d, safeName(overlayKey(rel)) + '.json');
+}
+function readOverlay(rel) {
+  return readJson(overlayPath(rel), { stamps: [], redactions: [], doodles: [] });
+}
+function writeOverlay(rel, data) {
+  writeJson(overlayPath(rel), {
+    stamps: data.stamps || [], redactions: data.redactions || [], doodles: data.doodles || [],
+  });
+  return true;
+}
+
+// render overlay elements as absolutely-positioned HTML for blueprint/export.
+// forExport = true bakes redactions fully opaque black.
+function overlayHtml(rel, forExport) {
+  const o = readOverlay(rel);
+  const parts = [];
+  for (const r of o.redactions || []) {
+    parts.push(`<div style="position:absolute;left:${r.x * 100}%;top:${r.y * 100}%;width:${r.w * 100}%;height:${r.h * 100}%;background:#000;${forExport ? '' : 'opacity:.88;'}"></div>`);
+  }
+  for (const s of o.stamps || []) {
+    const col = s.color || '#b3271e';
+    parts.push(`<div style="position:absolute;left:${s.x * 100}%;top:${s.y * 100}%;transform:translate(-50%,-50%) rotate(${s.rot || -8}deg);border:3px solid ${col};color:${col};font-family:'Cascadia Mono',Consolas,monospace;font-weight:700;letter-spacing:.08em;padding:4px 12px;border-radius:4px;opacity:.82;font-size:16px;text-transform:uppercase;">${s.text || s.kind}</div>`);
+  }
+  if (!parts.length && !(o.doodles || []).length) return '';
+  let svg = '';
+  if ((o.doodles || []).length) {
+    const paths = o.doodles.map((d) => `<path d="${d.path}" fill="none" stroke="${d.color || '#b3271e'}" stroke-width="${d.width || 0.4}" stroke-linecap="round"/>`).join('');
+    svg = `<svg viewBox="0 0 100 100" preserveAspectRatio="none" style="position:absolute;inset:0;width:100%;height:100%;">${paths}</svg>`;
+  }
+  return `<div style="position:absolute;inset:0;pointer-events:none;">${svg}${parts.join('')}</div>`;
+}
+
 // ---------- reminders ----------
 
 const remindersPath = () => p('.bludos', 'reminders.json');
@@ -834,7 +878,7 @@ function blueprintHtml(rel) {
   return `<!doctype html><html><head><meta charset="utf-8"><title>${page.title}</title><style>
 @page { size: A4; margin: 8mm; }
 body { background:#0e2a52; color:#eaf2ff; font-family:'Segoe UI',sans-serif; margin:0; }
-.bp { position:relative; min-height:275mm; border:2px solid #eaf2ff; outline:1px solid #eaf2ff; outline-offset:-6px;
+.bp { position:relative; min-height:275mm; border:2px solid #eaf2ff; outline:1px solid #eaf2ff; outline-offset:-6px; overflow:hidden;
   padding:12mm 12mm 62mm; box-sizing:border-box;
   background-image: linear-gradient(rgba(234,242,255,.08) 1px, transparent 1px), linear-gradient(90deg, rgba(234,242,255,.08) 1px, transparent 1px);
   background-size: 10mm 10mm; }
@@ -856,6 +900,7 @@ a { color:#bcd8ff } img { max-width:100% } hr { border:none; border-top:1px dash
 </style></head><body><div class="bp">
 <div class="bp-head"><span>BLUDOS ◆ BLUEPRINT</span><span>${meta.doc || ''}</span></div>
 ${mdToHtml(page.markdown)}
+${overlayHtml(rel, true)}
 <div class="titleblock"><table>
 ${tb('Title', page.title)}${tb('Doc №', meta.doc)}${tb('Project', parts[0])}
 ${tb('Phase', parts.length >= 3 ? parts[1] : '(unfiled)')}${tb('Status / Rev', meta.status || 'Draft')}
@@ -1254,6 +1299,7 @@ module.exports = {
   saveUserTemplate, listUserTemplates,
   archiveReadB64, resolveWiki, backlinks, allPagesFlat,
   listReminders, addReminder, markReminders, removeReminder, dueReminders,
+  readOverlay, writeOverlay, overlayHtml,
   activitySummary, musicList, musicImport, musicPick, musicRemove,
   archiveAddBytes, petsSummary, completeProject, retireKeptPet, deckList,
   blueprintHtml, blueprintPdf, gatesSummary,

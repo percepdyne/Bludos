@@ -75,8 +75,10 @@ app.whenReady().then(async () => {
       true;
     `);
 
-    await step('app mounted (sidebar + cover sheet render)', async () => {
-      assert(await exec(`__has('.sidebar') && __has('.dossier')`), 'sidebar/dossier missing — React crashed?');
+    await step('app mounted (sidebar + shelf home render)', async () => {
+      assert(await exec(`__has('.sidebar') && __has('.shelf-home')`), 'sidebar/shelf-home missing — React crashed?');
+      assert(await exec(`__has('.shelf .folder')`), 'project folder not on the shelf');
+      assert(await exec(`document.querySelector('.folder-code') && /[A-Z]+ [A-Z]+/.test(document.querySelector('.folder-code').textContent)`), 'codename missing on folder');
     });
 
     await step('quick-open palette opens on Ctrl+P and closes on Escape', async () => {
@@ -340,6 +342,39 @@ app.whenReady().then(async () => {
       await sleep(400);
       assert(await exec(`__has('.trash')`), 'trench view missing');
       assert(await exec(`document.querySelector('.trash').textContent.includes('TRENCH_LOG')`), 'trench header missing');
+    });
+
+    await step('completeness ring reflects the page', async () => {
+      await exec(`__click('.tree-page', 'DFMEA Renamed UI'); true`);
+      await sleep(600);
+      assert(await exec(`__has('.complete-ring svg')`), 'completeness ring missing');
+      const pct = await exec(`parseInt(document.querySelector('.ring-pct').textContent, 10)`);
+      assert(pct >= 0 && pct <= 100, 'ring percent out of range: ' + pct);
+    });
+
+    await step('markup mode: stamp persists to the overlay sidecar', async () => {
+      assert(await exec(`__click('.editor-meta .tb[title*="Markup"]')`), 'markup toggle missing');
+      await sleep(300);
+      assert(await exec(`__has('.markup-toolbar')`), 'markup toolbar missing');
+      assert(await exec(`__click('.stamp-palette button', '+ place')`), 'place-stamp button missing');
+      await sleep(300);
+      assert(await exec(`__has('.markup-layer .stamp')`), 'stamp not rendered on layer');
+      const relPage = PROJECT + '/03 Detailed Engineering & DFx/DFMEA Renamed UI.md';
+      const key = ws.readPage(relPage).meta.doc;
+      const ovPath = path.join(ws.info().root, '.bludos', 'overlays', key + '.json');
+      const saved = await waitFor(() => fs.existsSync(ovPath) && JSON.parse(fs.readFileSync(ovPath, 'utf8')).stamps.length > 0);
+      assert(saved, 'stamp not persisted to overlay sidecar');
+      await exec(`__click('.editor-meta .tb[title*="Markup"]'); true`); // exit markup mode
+      await sleep(150);
+    });
+
+    await step('focus mode toggles the body class', async () => {
+      assert(await exec(`__click('.editor-meta .tb[title*="Focus"]')`), 'focus button missing');
+      await sleep(200);
+      assert(await exec(`document.body.classList.contains('focus-mode')`), 'focus-mode class not applied');
+      await exec(`__click('.editor-meta .tb[title*="Focus"]'); true`);
+      await sleep(150);
+      assert(!(await exec(`document.body.classList.contains('focus-mode')`)), 'focus-mode not removed');
     });
 
     await step('notary timestamp block inserts with a SHA-256 hash', async () => {

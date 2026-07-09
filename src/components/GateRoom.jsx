@@ -12,6 +12,12 @@ export default function GateRoom({ onOpenPage }) {
   if (!data) return <div className="gateroom"><div className="muted pad">READING PROGRAM STATE…</div></div>;
 
   const pct = (ph) => (ph.done + ph.todo === 0 ? null : Math.round(ph.done / (ph.done + ph.todo) * 100));
+  const health = (proj) => {
+    let d = 0, t = 0;
+    for (const ph of proj.phases) { d += ph.done; t += ph.done + ph.todo; }
+    return t === 0 ? 0 : Math.round((d / t) * 100);
+  };
+  const grade = (h) => (h >= 90 ? 'A' : h >= 75 ? 'B' : h >= 55 ? 'C' : h >= 30 ? 'D' : 'E');
 
   return (
     <div className="gateroom">
@@ -21,7 +27,10 @@ export default function GateRoom({ onOpenPage }) {
       {data.length === 0 && <div className="muted pad">No projects on file.</div>}
       {data.map((proj) => (
         <section key={proj.name} className="gate-proj">
-          <div className="gate-proj-name">{proj.name}</div>
+          <div className="gate-proj-name">
+            {proj.name}
+            <span className={'health-badge g-' + grade(health(proj))}>HEALTH {health(proj)}% · {grade(health(proj))}</span>
+          </div>
           <div className="gate-grid">
             {proj.phases.map((ph) => {
               const p = pct(ph);

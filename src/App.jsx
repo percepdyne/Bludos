@@ -16,6 +16,8 @@ import Sketchbook from './components/Sketchbook.jsx';
 import HatcheryView from './components/HatcheryView.jsx';
 import DeckView from './components/DeckView.jsx';
 import TEMPLATE_PACKS from './templates.json';
+import { codename } from './tools/codename.js';
+import { setFeedbackEnabled, fb } from './tools/feedback.js';
 
 const invoke = (...a) => window.bludos.invoke(...a);
 
@@ -42,6 +44,7 @@ export default function App() {
   const [playerOpen, setPlayerOpen] = useState(false);
   const [overdue, setOverdue] = useState(0);
   const [banner, setBanner] = useState(null);
+  const [booting, setBooting] = useState(() => !sessionStorage.getItem('bludos-booted'));
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [recents, setRecents] = useState(loadRecents);
 
@@ -59,7 +62,16 @@ export default function App() {
     const a = settings.appearance || {};
     document.documentElement.dataset.accent = a.accent || 'lime';
     document.documentElement.dataset.sheet = a.sheet || 'light';
+    setFeedbackEnabled(!!settings.feedbackSound);
   }, [settings]);
+
+  // boot sequence (once per app launch)
+  useEffect(() => {
+    if (!booting) return;
+    sessionStorage.setItem('bludos-booted', '1');
+    const t = setTimeout(() => setBooting(false), 1600);
+    return () => clearTimeout(t);
+  }, [booting]);
 
   const saveSettings = async (patch) => setSettings(await invoke('settings:set', patch));
   const saveConfig = async (patch) => setConfig(await invoke('config:set', patch));
@@ -178,7 +190,7 @@ export default function App() {
         onExportProject={exportProject}
         onShowTemplates={() => setShowTemplates({})}
         onShowTemplatesAt={(project, folderName) => setShowTemplates({ project, folderName })}
-        onShowArchive={() => setView({ type: 'archive' })}
+        onShowArchive={() => { fb.drawer(); setView({ type: 'archive' }); }}
         onShowTrash={() => setView({ type: 'trash' })}
         onShowGates={() => setView({ type: 'gates' })}
         onShowToolbox={() => setToolboxOpen((v) => !v)}
@@ -212,9 +224,23 @@ export default function App() {
         {view.type === 'hatchery' && <HatcheryView onChanged={refreshTree} />}
         {view.type === 'deck' && <DeckView />}
         {view.type === 'home' && (
-          <Home tree={tree} info={info} onNewProject={newProject} onShowTemplates={() => setShowTemplates({})} />
+          <Home tree={tree} info={info} onNewProject={newProject} onOpenProject={(name) => {
+            const proj = tree.projects.find((p) => p.name === name);
+            const first = proj && proj.folders.flatMap((f) => f.pages)[0];
+            if (first) openPage(first.rel); else setShowTemplates({ project: name });
+          }} onShowTemplates={() => setShowTemplates({})} />
         )}
       </main>
+      {booting && (
+        <div className="boot" onClick={() => setBooting(false)}>
+          <div className="boot-inner">
+            <div className="boot-mark">◆</div>
+            <div className="boot-title">BLUDOS</div>
+            <div className="boot-line">SYSTEM ONLINE · BLUE DOSSIER</div>
+            <div className="boot-bar"><div className="boot-bar-fill" /></div>
+          </div>
+        </div>
+      )}
       {toolboxOpen && (
         <Toolbox
           settings={settings}
@@ -266,46 +292,48 @@ export default function App() {
   );
 }
 
-function Home({ tree, info, onNewProject, onShowTemplates }) {
+function Home({ tree, info, onNewProject, onOpenProject, onShowTemplates }) {
   const templateCount = TEMPLATE_PACKS.reduce((n, p) => n + p.templates.length, 0);
   const pageCount = tree.projects.reduce((n, pr) => n + pr.folders.reduce((m, f) => m + f.pages.length, 0), 0);
+  const hue = (name) => { let h = 2166136261; for (const ch of name) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); } return (h >>> 0) % 360; };
   return (
-    <div className="home">
-      <div className="dossier">
-        <div className="dossier-top">
-          <span>BLU_DOS // COVER SHEET</span>
-          <span>CLASS: INTERNAL</span>
-        </div>
-        <div className="barcode" />
+    <div className="shelf-home">
+      <div className="shelf-head">
         <div className="dossier-title">
           <span className="dossier-mark">◆</span>
           <h1>BLUDOS</h1>
-          <div className="dossier-sub">BLUE DOSSIER — LOCAL DESIGN DOCUMENTATION SYSTEM</div>
+          <div className="dossier-sub">BLUE DOSSIER — {String(tree.projects.length).padStart(2, '0')} PROJECTS · {String(pageCount).padStart(3, '0')} DOCS · {templateCount} TEMPLATES</div>
         </div>
-        <table className="spec-table">
-          <tbody>
-            <tr><td>PROJECTS ON FILE</td><td>{String(tree.projects.length).padStart(2, '0')}</td></tr>
-            <tr><td>DOCUMENTS</td><td>{String(pageCount).padStart(3, '0')}</td></tr>
-            <tr><td>TEMPLATE LIBRARY</td><td>{templateCount} DOCS · {TEMPLATE_PACKS.length} PACKS</td></tr>
-            <tr><td>STORAGE</td><td>{info ? info.root : '—'}</td></tr>
-            <tr><td>MODE</td><td>LOCAL · OFFLINE-FIRST · PLAIN MARKDOWN</td></tr>
-            <tr><td>QUICK JUMP</td><td>CTRL+P</td></tr>
-          </tbody>
-        </table>
         <div className="home-actions">
           <button className="primary" onClick={onNewProject}>+ NEW PROJECT</button>
-          <button onClick={onShowTemplates}>▤ BROWSE TEMPLATE LIBRARY</button>
-        </div>
-        {tree.projects.length === 0 && (
-          <p className="home-hint">
-            ▸ A new project is born with all 11 design phases plus Living Docs, ready for templates.
-          </p>
-        )}
-        <div className="dossier-foot">
-          <span>EST. 2026 · PHYSICAL PRODUCT DESIGN</span>
-          <span>REV B.0</span>
+          <button onClick={onShowTemplates}>▤ TEMPLATES</button>
         </div>
       </div>
+      <div className="shelf">
+        {tree.projects.map((pr) => {
+          const docs = pr.folders.reduce((m, f) => m + f.pages.length, 0);
+          const h = hue(pr.name);
+          return (
+            <div key={pr.name} className="folder" style={{ '--fh': h }} onClick={() => onOpenProject(pr.name)} title={`Open ${pr.name}`}>
+              <div className="folder-tab" />
+              <div className="folder-body">
+                <div className="folder-code">{codename(pr.name)}</div>
+                <div className="folder-name">{pr.name}</div>
+                <div className="folder-meta">{docs} DOC{docs === 1 ? '' : 'S'}</div>
+                <div className="folder-barcode" />
+              </div>
+            </div>
+          );
+        })}
+        <div className="folder new-folder" onClick={onNewProject}>
+          <div className="folder-tab" />
+          <div className="folder-body"><div className="new-plus">+</div><div className="folder-meta">NEW PROJECT</div></div>
+        </div>
+      </div>
+      {tree.projects.length === 0 && (
+        <p className="home-hint">▸ Every project is born with all 11 design phases plus Living Docs — and a companion hatches for it.</p>
+      )}
+      <div className="shelf-foot"><span>STORAGE · {info ? info.root : '—'}</span><span>CTRL+P TO JUMP · LOCAL · OFFLINE-FIRST</span></div>
     </div>
   );
 }

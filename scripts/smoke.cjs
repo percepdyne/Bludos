@@ -131,6 +131,19 @@ app.whenReady().then(async () => {
     assert(bp.ok && fs.readFileSync(bpDest).slice(0, 4).toString() === '%PDF', 'blueprint pdf rendered');
     fs.unlinkSync(bpDest);
 
+    // --- Markup overlay round-trip + baked into blueprint export ---
+    ws.writeOverlay(restored.rel, {
+      stamps: [{ id: 's1', kind: 'APPROVED', text: 'APPROVED', color: '#1f8a4c', x: 0.5, y: 0.3, rot: -8 }],
+      redactions: [{ id: 'r1', x: 0.1, y: 0.1, w: 0.2, h: 0.05 }],
+      doodles: [],
+    });
+    const ovr = ws.readOverlay(restored.rel);
+    assert(ovr.stamps.length === 1 && ovr.redactions.length === 1, 'overlay persisted');
+    assert(/APPROVED/.test(ws.overlayHtml(restored.rel, true)), 'stamp baked into export html');
+    assert(/background:#000/.test(ws.overlayHtml(restored.rel, true)), 'redaction baked as black');
+    assert(/APPROVED/.test(ws.blueprintHtml(restored.rel)), 'overlay present in blueprint');
+    ws.writeOverlay(restored.rel, { stamps: [], redactions: [], doodles: [] }); // reset
+
     // --- Gate Room summary counts checklist state ---
     const gproj = ws.gatesSummary().find((p2) => p2.name === name);
     const ph01 = gproj.phases.find((f) => f.name.startsWith('01'));
@@ -283,6 +296,7 @@ app.whenReady().then(async () => {
         fs.writeFileSync(chainPath, JSON.stringify(c, null, 2));
       }
       if (docId) { try { fs.rmSync(path.join(root, '.bludos', 'revisions', docId), { recursive: true, force: true }); } catch { /* ignore */ } }
+      if (docId) { try { fs.unlinkSync(path.join(root, '.bludos', 'overlays', docId + '.json')); } catch { /* ignore */ } }
       // remove any test companion / card / reminders and restore today's activity
       for (const f of ['pets.json', 'deck.json']) {
         const fp = path.join(root, '.bludos', f);
