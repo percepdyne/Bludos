@@ -7,6 +7,8 @@ export default function Sidebar({
   onOpenPage, onNewPage, onTrashPage, onNewProject, onExportProject,
   onShowTemplates, onShowTemplatesAt, onShowArchive, onShowTrash, onShowGates, onHome,
   onShowToolbox, onShowSettings, onSetOperator, onSwitchWorkspace,
+  onShowActivity, onShowPlayer, onShowSketch, onShowHatchery, onShowDeck, onShowReminders,
+  hatcheryOn, overdue,
 }) {
   const [q, setQ] = useState('');
   const [results, setResults] = useState(null);
@@ -73,6 +75,13 @@ export default function Sidebar({
                   title="Export project folder (Markdown + HTML + integrity manifest)"
                   onClick={(e) => { e.stopPropagation(); onExportProject(proj.name); }}
                 >⤓</button>
+                {hatcheryOn && (
+                  <button
+                    className="mini"
+                    title="Complete project — resolve its companion"
+                    onClick={(e) => { e.stopPropagation(); onShowHatchery(); }}
+                  >✓</button>
+                )}
               </div>
               {open[proj.name] &&
                 proj.folders.map((folder) => {
@@ -136,12 +145,22 @@ export default function Sidebar({
         </div>
       </div>
       <div className="sidebar-actions">
-        <button onClick={onShowToolbox}>⚒ TOOLBOX</button>
-        <button onClick={onShowTemplates}>▤ TEMPLATES</button>
-        <button onClick={onShowArchive}>▣ ARCHIVE</button>
-        <button onClick={onShowTrash} title="The Trench — nuked items rest here for 30 days">≋ TRENCH</button>
-        <button onClick={onShowGates} title="Program dashboard — checklist completion per phase">◧ GATE ROOM</button>
-        <button onClick={onShowSettings}>⛭ SETTINGS</button>
+        <div className="action-rail">
+          <button onClick={onShowToolbox} title="Toolbox — 54 engineering tools">⚒</button>
+          <button onClick={onShowTemplates} title="Template library">▤</button>
+          <button onClick={onShowArchive} title="Archive">▣</button>
+          <button onClick={onShowGates} title="Gate Room — program dashboard">◧</button>
+          <button onClick={onShowActivity} title="Activity heatmap & streak">▓</button>
+          <button onClick={onShowPlayer} title="Player — offline music">♫</button>
+          <button onClick={onShowSketch} title="Sketchbook — draw with a stylus">✎</button>
+          <button onClick={onShowHatchery} title="Hatchery — project companions" style={hatcheryOn ? null : { display: 'none' }}>▦</button>
+          <button onClick={onShowDeck} title="Deck — achievement cards" style={hatcheryOn ? null : { display: 'none' }}>⬢</button>
+          <button onClick={onShowReminders} title="Reminders" className={overdue ? 'has-badge' : ''}>
+            🔔{overdue ? <span className="rail-badge">{overdue}</span> : null}
+          </button>
+          <button onClick={onShowTrash} title="The Trench — nuked items rest 30 days">≋</button>
+          <button onClick={onShowSettings} title="Settings">⛭</button>
+        </div>
         <button className="primary" onClick={onNewProject}>+ NEW PROJECT</button>
       </div>
     </aside>

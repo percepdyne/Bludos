@@ -9,6 +9,12 @@ import QuickOpen from './components/QuickOpen.jsx';
 import Toolbox from './components/Toolbox.jsx';
 import SettingsModal from './components/SettingsModal.jsx';
 import GateRoom from './components/GateRoom.jsx';
+import RemindersView from './components/RemindersView.jsx';
+import ActivityView from './components/ActivityView.jsx';
+import MusicPlayer from './components/MusicPlayer.jsx';
+import Sketchbook from './components/Sketchbook.jsx';
+import HatcheryView from './components/HatcheryView.jsx';
+import DeckView from './components/DeckView.jsx';
 import TEMPLATE_PACKS from './templates.json';
 
 const invoke = (...a) => window.bludos.invoke(...a);
@@ -33,6 +39,9 @@ export default function App() {
   const [quickOpen, setQuickOpen] = useState(false);
   const [toolboxOpen, setToolboxOpen] = useState(false);
   const [toolPrefill, setToolPrefill] = useState(null);
+  const [playerOpen, setPlayerOpen] = useState(false);
+  const [overdue, setOverdue] = useState(0);
+  const [banner, setBanner] = useState(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [recents, setRecents] = useState(loadRecents);
 
@@ -54,6 +63,21 @@ export default function App() {
 
   const saveSettings = async (patch) => setSettings(await invoke('settings:set', patch));
   const saveConfig = async (patch) => setConfig(await invoke('config:set', patch));
+
+  // reminder badge count + fire banner
+  const refreshOverdue = useCallback(async () => {
+    const list = await invoke('reminders:list');
+    setOverdue(list.filter((r) => !r.done && new Date(r.dueISO).getTime() <= Date.now()).length);
+  }, []);
+  useEffect(() => {
+    refreshOverdue();
+    const off = window.bludos.on('reminder:fire', (due) => {
+      setBanner(due[due.length - 1]);
+      refreshOverdue();
+    });
+    const iv = setInterval(refreshOverdue, 60000);
+    return () => { off && off(); clearInterval(iv); };
+  }, [refreshOverdue]);
 
   // Block the window from navigating away when files are dropped outside a drop zone
   useEffect(() => {
@@ -159,6 +183,14 @@ export default function App() {
         onShowGates={() => setView({ type: 'gates' })}
         onShowToolbox={() => setToolboxOpen((v) => !v)}
         onShowSettings={() => setSettingsOpen(true)}
+        onShowActivity={() => setView({ type: 'activity' })}
+        onShowPlayer={() => setPlayerOpen((v) => !v)}
+        onShowSketch={() => setView({ type: 'sketch' })}
+        onShowHatchery={() => setView({ type: 'hatchery' })}
+        onShowDeck={() => setView({ type: 'deck' })}
+        onShowReminders={() => setView({ type: 'reminders' })}
+        hatcheryOn={settings.hatcheryEnabled !== false}
+        overdue={overdue}
         onHome={() => setView({ type: 'home' })}
         onSetOperator={() => setSettingsOpen(true)}
         onSwitchWorkspace={switchWorkspace}
@@ -174,6 +206,11 @@ export default function App() {
         {view.type === 'archive' && <Archive />}
         {view.type === 'trash' && <Trash onRestored={refreshTree} />}
         {view.type === 'gates' && <GateRoom onOpenPage={openPage} />}
+        {view.type === 'reminders' && <RemindersView onOpenPage={openPage} onChanged={refreshOverdue} />}
+        {view.type === 'activity' && <ActivityView />}
+        {view.type === 'sketch' && <Sketchbook projects={tree.projects.map((p) => p.name)} />}
+        {view.type === 'hatchery' && <HatcheryView onChanged={refreshTree} />}
+        {view.type === 'deck' && <DeckView />}
         {view.type === 'home' && (
           <Home tree={tree} info={info} onNewProject={newProject} onShowTemplates={() => setShowTemplates({})} />
         )}
@@ -187,6 +224,14 @@ export default function App() {
           onSaveSettings={saveSettings}
           prefill={toolPrefill}
         />
+      )}
+      <MusicPlayer open={playerOpen} onClose={() => setPlayerOpen(false)} />
+      {banner && (
+        <div className="reminder-banner" onClick={() => { if (banner.rel) openPage(banner.rel); setBanner(null); }}>
+          <span className="rb-ic">🔔</span>
+          <span className="rb-text">{banner.text}</span>
+          <button className="close" onClick={(e) => { e.stopPropagation(); setBanner(null); }}>✕</button>
+        </div>
       )}
       {settingsOpen && (
         <SettingsModal

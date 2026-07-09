@@ -16,10 +16,13 @@ app.whenReady().then(async () => {
   const runStart = new Date().toISOString();
   let prevCfg = {};
   let docId = '';
+  let prevActivityToday;
   try {
     ws.initWorkspace();
     prevCfg = ws.getConfig();
     ws.setConfig({ userName: 'Auditor' });
+    // snapshot today's activity count so this run doesn't inflate the real heatmap
+    { const a = ws.activitySummary(); const t = a.days[a.days.length - 1]; prevActivityToday = t ? t.count : 0; }
 
     // --- template integrity (A2): no gate item split inside parentheses ---
     const packs = require('../src/templates.json');
@@ -151,6 +154,46 @@ app.whenReady().then(async () => {
     chain = ws.verifyLogChain().filter((c) => c.project === name);
     assert(chain.length === 1 && chain[0].ok === false, 'tampering not detected');
 
+    // --- Reminders CRUD + due detection ---
+    ws.addReminder({ text: 'past due item', dueISO: new Date(Date.now() - 1000).toISOString(), project: name });
+    ws.addReminder({ text: 'future item', dueISO: new Date(Date.now() + 3.6e6).toISOString(), project: name });
+    let rem = ws.listReminders().filter((r) => r.project === name);
+    assert(rem.length === 2, 'two reminders stored');
+    assert(ws.dueReminders().some((r) => r.text === 'past due item'), 'past reminder is due');
+    assert(!ws.dueReminders().some((r) => r.text === 'future item'), 'future reminder not due');
+    ws.markReminders(ws.dueReminders().map((r) => r.id), { fired: true });
+    assert(ws.dueReminders().length === 0 || !ws.dueReminders().some((r) => r.project === name), 'fired reminders no longer due');
+    for (const r of rem) ws.removeReminder(r.id);
+    assert(ws.listReminders().filter((r) => r.project === name).length === 0, 'reminders removed');
+
+    // --- Activity bumped by page writes ---
+    const act = ws.activitySummary();
+    const today = new Date().toISOString().slice(0, 10);
+    assert(act.days.some((d) => d.date === today && d.count > 0), 'today has activity from this run');
+    assert(act.streak >= 1, 'streak >= 1');
+
+    // --- Companion pet hatched with the project ---
+    const myPet = ws.petsSummary().find((p2) => p2.project === name);
+    assert(myPet, 'pet hatched for project');
+    assert(myPet.species >= 0 && myPet.species <= 7, 'species in range');
+    assert(myPet.stage >= 1 && myPet.stage <= 5, 'stage computed: ' + myPet.stage);
+    assert(myPet.colorway >= 0 && myPet.colorway < 360, 'colorway hue set');
+
+    // --- Complete project → mint achievement card ---
+    const beforeDeck = ws.deckList().length;
+    const comp = ws.completeProject(name, false);
+    assert(comp.ok && comp.carded, 'project carded: ' + JSON.stringify(comp));
+    assert(ws.deckList().length === beforeDeck + 1, 'deck gained a card');
+    assert(!ws.petsSummary().some((p2) => p2.project === name), 'pet removed after carding');
+    // clean the card we just minted
+    { const dp = path.join(ws.info().root, '.bludos', 'deck.json'); const d = JSON.parse(fs.readFileSync(dp, 'utf8')).filter((c) => c.project !== name); fs.writeFileSync(dp, JSON.stringify(d, null, 2)); }
+
+    // --- Sketch bytes land in the archive ---
+    const onePx = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+    const sk = ws.archiveAddBytes('unit-sketch.png', onePx, { project: name, tags: ['sketch'] });
+    assert(sk.ok && ws.archiveList().some((a) => a.file === sk.file), 'sketch saved to archive');
+    ws.archiveRemove(ws.archiveList().find((a) => a.file === sk.file).id);
+
     // --- Wiki-links & backlinks ---
     const linker = ws.createPage(name, '00 Strategy & Systems Architecture', 'Linker', 'See [[PRD Smoke Renamed]] and [[' + docId + ']].');
     const target = ws.backlinks(restored.rel);
@@ -240,6 +283,26 @@ app.whenReady().then(async () => {
         fs.writeFileSync(chainPath, JSON.stringify(c, null, 2));
       }
       if (docId) { try { fs.rmSync(path.join(root, '.bludos', 'revisions', docId), { recursive: true, force: true }); } catch { /* ignore */ } }
+      // remove any test companion / card / reminders and restore today's activity
+      for (const f of ['pets.json', 'deck.json']) {
+        const fp = path.join(root, '.bludos', f);
+        if (fs.existsSync(fp)) {
+          const arr = JSON.parse(fs.readFileSync(fp, 'utf8')).filter((x) => x.project !== name);
+          fs.writeFileSync(fp, JSON.stringify(arr, null, 2));
+        }
+      }
+      const remP = path.join(root, '.bludos', 'reminders.json');
+      if (fs.existsSync(remP)) {
+        const arr = JSON.parse(fs.readFileSync(remP, 'utf8')).filter((x) => x.project !== name);
+        fs.writeFileSync(remP, JSON.stringify(arr, null, 2));
+      }
+      const actP = path.join(root, '.bludos', 'activity.json');
+      if (fs.existsSync(actP) && prevActivityToday !== undefined) {
+        const a = JSON.parse(fs.readFileSync(actP, 'utf8'));
+        const today = new Date().toISOString().slice(0, 10);
+        if (prevActivityToday === 0) delete a[today]; else a[today] = prevActivityToday;
+        fs.writeFileSync(actP, JSON.stringify(a, null, 2));
+      }
       ws.setConfig({ userName: prevCfg.userName || '' });
     } catch (e) { console.error('cleanup issue:', e.message); }
     app.quit();

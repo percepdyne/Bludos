@@ -3,7 +3,7 @@ import { TOOL_PACKS } from '../tools/tools.jsx';
 
 const invoke = (...a) => window.bludos.invoke(...a);
 
-const SECTIONS = ['Profile', 'Workspace', 'Appearance', 'Toolbox', 'Integrations', 'Shortcuts', 'Data'];
+const SECTIONS = ['Profile', 'Workspace', 'Appearance', 'Toolbox', 'Companion', 'Integrations', 'Shortcuts', 'Data'];
 const ACCENTS = [
   { id: 'lime', color: '#c8f31d' },
   { id: 'cyan', color: '#67e8f9' },
@@ -102,6 +102,26 @@ export default function SettingsModal({ settings, config, info, onClose, onSaveS
                     </span>
                   </label>
                 ))}
+              </>
+            )}
+            {sec === 'Companion' && (
+              <>
+                <div className="col-label">HATCHERY COMPANIONS</div>
+                <p className="set-hint">A small companion hatches with each new project and evolves as you document. Purely ambient — it mirrors your project's real progress. When a project completes you can keep it on display (up to 3) or mint it as an achievement card in your Deck.</p>
+                <label className="pack-toggle">
+                  <input type="checkbox"
+                    checked={settings.hatcheryEnabled !== false}
+                    onChange={(e) => onSaveSettings({ hatcheryEnabled: e.target.checked })} />
+                  <span>Enable companions</span>
+                  <span className="muted">shows the Hatchery + Deck</span>
+                </label>
+                <label className="pack-toggle">
+                  <input type="checkbox"
+                    checked={!!settings.feedbackSound}
+                    onChange={(e) => onSaveSettings({ feedbackSound: e.target.checked })} />
+                  <span>Tactile feedback sounds</span>
+                  <span className="muted">clicks & stamps (coming online)</span>
+                </label>
               </>
             )}
             {sec === 'Integrations' && (

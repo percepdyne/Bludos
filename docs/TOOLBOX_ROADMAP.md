@@ -115,3 +115,38 @@ Today settings are scattered (✎ operator, ⇄ workspace, ⚙ webhook). One mod
 **Deliberately not doing:** in-app CAD modeling (viewer only), shipping Pantone data (licensing), Pinterest official API (clipper covers it), background AI indexing without explicit opt-in.
 
 **Still queued from earlier (unchanged priority):** Yjs peer sync remains the biggest single unlock for team adoption and should not fall behind the toolbox.
+
+---
+
+## Fun Pack (brainstormed 2026-07-07) — making documentation *engaging*
+
+Theory of fun for Bludos: no confetti, no badges — deepen the "operator of a classified design bureau" fiction the app already lives in (NUKE, TRENCH, dossiers, doc №s), and reward the *act* of documenting with feedback loops and delight at milestones. Every flavor feature must be functional too, and every sound/animation opt-outable.
+
+**Feedback loops (documenting feels like progress):**
+- **Gate-clear ceremony** — when a phase checklist hits 100%: an ink-stamp "CLEARED ▮ PHASE 03" slams diagonally across the Gate Room cell + a printable Gate Certificate (blueprint-styled, doc-controlled). Milestones become wins.
+- **Weekly dossier digest** — Monday auto-page: docs touched, items closed, releases, calcs run, assets archived, with sparklines. A mission report about yourself.
+- **Program odometer + streak readout** — lifetime counters (words, calcs, checks) on the cover sheet; "STREAK ▮ 14 DAYS" in the sidebar readout fed by the lab-notebook chain.
+- **On this day** — cover sheet resurfaces what you documented 1/3/6 months ago.
+
+**Flavor with function:**
+- **Ink stamps** — `/stamp` slams APPROVED / REJECTED / CONFIDENTIAL / PROTOTYPE / OBSOLETE as rotated ink-stamp marks (markdown-safe shortcodes, styled in editor + blueprint + export). Communicates state at a glance, feels great.
+- **Redaction bars** — select → ⬛ redact for screenshots and demos; click to reveal locally. Spy-dossier flavor, real IP utility.
+- **Trench depth** — nuked items sink with a sonar ping; trench lists items "at 10,911 m — dissolves in 3 days". Pure theater on top of existing retention data.
+- **Boot sequence** — 1.5 s HUD start-up ("MOUNTING WORKSPACE… 214 DOCS ▮ CHAIN VERIFIED"), skippable, off-able.
+- **Teletype keys (opt-in)** — mechanical clacks in focus mode; stamp "kachunk" on gate clear.
+
+**Creative joy:**
+- **Sketch blocks** — `/sketch` opens a freehand ink canvas inside the doc, saved as SVG to `_media`. Designers think by drawing; make it one keystroke.
+- **Project mood tint** — each project's cover/accents auto-tinted from its own archived inspiration palettes (reuses color-search data).
+- **`/banner` generative dividers** — barcode strips, registration marks, technical ornaments to give long docs rhythm.
+
+**Habit formers (fun = frictionless):**
+- **Quick capture** — global OS hotkey (works while CAD/browser has focus): tiny always-on-top bar, type a thought, lands timestamped in today's LOG. The single most engagement-generating feature here.
+- **Voice memos on log pages** — record → audio into `_media` (transcription joins the AI wave later).
+
+**Team culture artifacts:**
+- **Operator ID card** — printable badge: name, operator №, stats, QR. Pairs with sample tags.
+- **Time capsule** — kickoff predictions page, hash-sealed (existing chain), unsealed at the final gate. Retro gold.
+- **Presentation mode** — any doc becomes full-screen dossier-styled slides split on `##` headings, for design reviews.
+
+Suggested build order (engagement-per-effort): stamps → gate ceremony + certificate → quick capture → digest/odometer/streak → sketch blocks → redaction → mood tint → presentation mode → boot/sounds/trench-depth → ID card/time capsule.

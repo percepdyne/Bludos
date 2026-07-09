@@ -66,6 +66,12 @@ npm run dist     # build Windows installer + portable exe into release/
 - **Wiki-links & backlinks** — `[[Doc № or Title]]` links pages (rename-proof via doc №); every page shows who links to it. Insert via `/link` or type `[[`.
 - **Search the archive by color** — dominant palettes are extracted per image; pick a color (screen eyedropper or hex) or click a card's swatch to filter inspiration by hue.
 - **Contact sheets** — export the filtered archive as a print-ready label-sheet PDF/HTML.
+- **Notary timestamps** (⏱) — stamp a page with a local time + SHA-256 of its content, making its state at that instant provable and tamper-evident for copyright/inventorship.
+- **Reminders** (🔔) — attach a due date to any page/project; native + in-app notification when due, with an overdue badge on the sidebar bell.
+- **Activity heatmap** (▓) — GitHub-style contribution grid of documentation activity, with a day-streak counter.
+- **Offline music player** (♫) — import MP3s (stored in-workspace, fully offline), playlists, shuffle/loop, a winding **cassette-tape** animation, and a WebAudio visualizer. Playback continues while you work.
+- **Sketchbook** (✎) — pressure-sensitive stylus canvas (great on a tablet); pen/marker/eraser, saves straight into the Archive.
+- **Companions & Deck** (▦ / ⬢) — a small SVG creature/specimen hatches with each new project and evolves through 5 stages as you document (the 5th, *Prime*, only for fast, efficient work); 8 species with a rare 8th, colour-keyed per project. On completion, keep up to 3 on display or mint them as achievement cards in your Deck. Fully optional — one toggle in Settings ▸ Companion.
 
 ## Where your data lives
 

@@ -16,6 +16,8 @@ import { BlueprintModal, TagModal, RevisionsModal } from './DocModals.jsx';
 import { csvChart, chartBlock } from '../tools/chart.js';
 import { CALC_SPECS } from '../tools/calcs.js';
 import { WikiLink, SLASH_COMMANDS } from '../tools/editor-ext.js';
+import { timestampBlock, canonicalize, localIso, sha256Hex } from '../tools/notary.js';
+import ReminderModal from './ReminderModal.jsx';
 
 const invoke = (...a) => window.bludos.invoke(...a);
 
@@ -49,6 +51,7 @@ export default function Editor({ rel, onRenamed }) {
   const [docModal, setDocModal] = useState(null); // null | 'blueprint' | 'tag' | 'revs'
   const [slash, setSlash] = useState(null); // { items, index, coords }
   const [backlinks, setBacklinks] = useState([]);
+  const [reminderOpen, setReminderOpen] = useState(false);
   const [, setSelTick] = useState(0); // bumped on caret move so RECALC re-evaluates
   const loaded = useRef(false);
   const dirty = useRef(false);
@@ -225,6 +228,16 @@ export default function Editor({ rel, onRenamed }) {
     setMeta(data || { ...meta, status });
   };
 
+  const notarize = async () => {
+    const ed = editorRef.current;
+    if (!ed || ed.isDestroyed) return;
+    const hash = await sha256Hex(canonicalize(ed.storage.markdown.getMarkdown()));
+    const operator = (await invoke('config:get')).userName || '';
+    const block = timestampBlock({ iso: localIso(), hash, operator });
+    ed.commands.insertContentAt(ed.state.doc.content.size, '\n\n' + block + '\n');
+    ed.commands.focus('end');
+  };
+
   const saveAsTemplate = async () => {
     await flushNow();
     const r = await invoke('template:save-user', rel);
@@ -365,6 +378,8 @@ export default function Editor({ rel, onRenamed }) {
           </select>
           <span className="save-state">{saved ? 'Saved' : 'Saving…'}</span>
           {shareState === 'err' && <span className="share-err" title={shareErr}>Share failed: {shareErr}</span>}
+          <button className="tb" title="Notarize — stamp a tamper-evident timestamp + content hash" onClick={notarize}>⏱</button>
+          <button className="tb" title="Set a reminder about this document" onClick={() => setReminderOpen(true)}>🔔</button>
           <button className="tb" title="Blueprint mode — cyanotype render + PDF" onClick={async () => { await flushNow(); setDocModal('blueprint'); }}>▦</button>
           <button className="tb" title="Print a QR sample tag for the physical thing" onClick={() => setDocModal('tag')}>▩</button>
           <button className="tb" title="Revision vault (snapshots on status change)" onClick={() => setDocModal('revs')}>☰</button>
@@ -377,6 +392,9 @@ export default function Editor({ rel, onRenamed }) {
           <button className="tb" title="Teams webhook settings" onClick={openWebhookSettings}>⚙</button>
         </div>
       </div>
+      {reminderOpen && (
+        <ReminderModal rel={rel} project={rel.split('/')[0]} title={title} onClose={() => setReminderOpen(false)} />
+      )}
       {docModal === 'blueprint' && <BlueprintModal rel={rel} onClose={() => setDocModal(null)} />}
       {docModal === 'tag' && <TagModal rel={rel} meta={meta} title={title} onClose={() => setDocModal(null)} />}
       {docModal === 'revs' && (
