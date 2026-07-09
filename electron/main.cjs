@@ -1,6 +1,8 @@
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, Notification } = require('electron');
 const path = require('path');
 const ws = require('./workspace.cjs');
+
+let mainWin = null;
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -19,6 +21,24 @@ function createWindow() {
     if (level >= 2) console.log('[renderer]', message);
   });
   win.loadFile(path.join(__dirname, '..', 'dist', 'index.html'));
+  mainWin = win;
+}
+
+// Poll for due reminders: native notification + in-app push, fired once each.
+function startReminderLoop() {
+  const tick = () => {
+    try {
+      const due = ws.dueReminders();
+      if (!due.length) return;
+      for (const r of due) {
+        if (Notification.isSupported()) new Notification({ title: 'Bludos reminder', body: r.text }).show();
+      }
+      ws.markReminders(due.map((r) => r.id), { fired: true });
+      if (mainWin && !mainWin.isDestroyed()) mainWin.webContents.send('reminder:fire', due);
+    } catch { /* keep the loop alive */ }
+  };
+  setTimeout(tick, 4000);        // catch overdue soon after launch
+  setInterval(tick, 30000);
 }
 
 function registerIpc() {
@@ -70,6 +90,19 @@ function registerIpc() {
     'wiki:resolve': (e, target) => ws.resolveWiki(target),
     'wiki:backlinks': (e, rel) => ws.backlinks(rel),
     'wiki:pages': () => ws.allPagesFlat(),
+    'reminders:list': () => ws.listReminders(),
+    'reminders:add': (e, r) => ws.addReminder(r),
+    'reminders:update': (e, id, patch) => ws.markReminders([id], patch),
+    'reminders:remove': (e, id) => ws.removeReminder(id),
+    'activity:summary': () => ws.activitySummary(),
+    'music:list': () => ws.musicList(),
+    'music:pick': () => ws.musicPick(),
+    'music:remove': (e, id) => ws.musicRemove(id),
+    'sketch:save': (e, name, b64, meta) => ws.archiveAddBytes(name, b64, meta),
+    'pets:summary': () => ws.petsSummary(),
+    'pets:complete': (e, project, keep) => ws.completeProject(project, keep),
+    'pets:retire': (e, project) => ws.retireKeptPet(project),
+    'deck:list': () => ws.deckList(),
   };
   for (const [channel, fn] of Object.entries(handlers)) ipcMain.handle(channel, fn);
 }
@@ -78,6 +111,7 @@ app.whenReady().then(() => {
   ws.initWorkspace();
   registerIpc();
   createWindow();
+  startReminderLoop();
   console.log('[bludos] ready — workspace:', ws.info().root);
 });
 

@@ -190,6 +190,8 @@ function getTree() {
 function createProject(name) {
   const n = safeName(name);
   for (const f of PHASE_FOLDERS) fs.mkdirSync(p(n, f), { recursive: true });
+  hatchPet(n);           // a companion hatches with each new project
+  bumpActivity('project');
   return getTree();
 }
 
@@ -218,6 +220,7 @@ function createPage(project, phase, title, markdown) {
   const who = getConfig().userName;
   if (who) fm.author = who;
   fs.writeFileSync(path.join(dir, file), matter.stringify(body, fm));
+  bumpActivity('page');
   return [safeName(project), phase, file].join('/');
 }
 
@@ -242,6 +245,7 @@ function writePage(rel, markdown) {
   const who = getConfig().userName;
   if (who) data.updatedBy = who;
   fs.writeFileSync(abs, matter.stringify(markdown || '', data));
+  bumpActivity('write');
   return true;
 }
 
@@ -539,6 +543,240 @@ function search(q) {
     }
   }
   return results.sort((a, b) => b.score - a.score).slice(0, 50);
+}
+
+// ---------- activity heatmap ----------
+
+const activityPath = () => p('.bludos', 'activity.json');
+
+function bumpActivity(kind) {
+  try {
+    const day = new Date().toISOString().slice(0, 10);
+    const a = readJson(activityPath(), {});
+    a[day] = (a[day] || 0) + 1;
+    writeJson(activityPath(), a);
+    void kind;
+  } catch { /* activity is best-effort */ }
+}
+
+function activitySummary(days = 133) {
+  const a = readJson(activityPath(), {});
+  const out = [];
+  const today = new Date();
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(today); d.setDate(today.getDate() - i);
+    const key = d.toISOString().slice(0, 10);
+    out.push({ date: key, count: a[key] || 0 });
+  }
+  // current streak (consecutive days up to today with activity)
+  let streak = 0;
+  for (let i = out.length - 1; i >= 0; i--) { if (out[i].count > 0) streak++; else break; }
+  const total = out.reduce((s, x) => s + x.count, 0);
+  return { days: out, streak, total, max: Math.max(1, ...out.map((x) => x.count)) };
+}
+
+// ---------- offline music player ----------
+
+const musicDir = () => { const d = p('.bludos', 'music'); fs.mkdirSync(d, { recursive: true }); return d; };
+const musicIndexPath = () => p('.bludos', 'music.json');
+const AUDIO_EXT = new Set(['.mp3', '.m4a', '.ogg', '.wav', '.flac', '.aac']);
+
+function musicList() {
+  const idx = readJson(musicIndexPath(), []);
+  return idx
+    .filter((t) => fs.existsSync(path.join(musicDir(), t.file)))
+    .map((t) => ({ ...t, url: 'file:///' + encodeURI(path.join(musicDir(), t.file).replace(/\\/g, '/')) }));
+}
+
+function musicImport(paths) {
+  const idx = readJson(musicIndexPath(), []);
+  for (const src of paths || []) {
+    if (!AUDIO_EXT.has(path.extname(src).toLowerCase())) continue;
+    const file = uniqueFile(musicDir(), path.basename(src, path.extname(src)), path.extname(src));
+    try { fs.copyFileSync(src, path.join(musicDir(), file)); } catch { continue; }
+    idx.push({ id: crypto.randomUUID(), file, name: path.basename(src, path.extname(src)), added: new Date().toISOString() });
+  }
+  writeJson(musicIndexPath(), idx);
+  return musicList();
+}
+
+async function musicPick() {
+  const { dialog } = require('electron');
+  const res = await dialog.showOpenDialog({
+    title: 'Add music', properties: ['openFile', 'multiSelections'],
+    filters: [{ name: 'Audio', extensions: ['mp3', 'm4a', 'ogg', 'wav', 'flac', 'aac'] }],
+  });
+  if (res.canceled) return musicList();
+  return musicImport(res.filePaths);
+}
+
+function musicRemove(id) {
+  const idx = readJson(musicIndexPath(), []);
+  const t = idx.find((x) => x.id === id);
+  if (t) { try { fs.unlinkSync(path.join(musicDir(), t.file)); } catch { /* gone */ } }
+  writeJson(musicIndexPath(), idx.filter((x) => x.id !== id));
+  return musicList();
+}
+
+// ---------- sketchbook (saves into the archive) ----------
+
+function archiveAddBytes(name, bytesOrB64, meta = {}) {
+  const buf = typeof bytesOrB64 === 'string' ? Buffer.from(bytesOrB64, 'base64') : Buffer.from(bytesOrB64);
+  const ext = path.extname(name) || '.png';
+  const file = uniqueFile(archiveDir(), path.basename(name, ext).replace(/[^\w.-]+/g, '-') || 'sketch', ext);
+  fs.writeFileSync(path.join(archiveDir(), file), buf);
+  const idx = readJson(archiveIndexPath(), []);
+  idx.push({
+    id: crypto.randomUUID(), file, name: file, kind: kindOf(ext.slice(1).toLowerCase()),
+    tags: meta.tags || [], project: meta.project || '', phase: '', sourceUrl: '',
+    added: new Date().toISOString(), size: buf.length,
+    sha256: crypto.createHash('sha256').update(buf).digest('hex'),
+  });
+  writeJson(archiveIndexPath(), idx);
+  return { ok: true, file };
+}
+
+// ---------- companion pets & achievement deck ----------
+
+const petlogic = require('./petlogic.cjs');
+const petsPath = () => p('.bludos', 'pets.json');
+const deckPath = () => p('.bludos', 'deck.json');
+
+function hatchPet(project) {
+  if (getSettings().hatcheryEnabled === false) return null;
+  const pets = readJson(petsPath(), []);
+  if (pets.some((x) => x.project === project)) return null;
+  // hatches since the last rare, across this workspace
+  let since = 0;
+  for (let i = pets.length - 1; i >= 0; i--) { if (pets[i].species === petlogic.RARE_INDEX) break; since++; }
+  const species = petlogic.rollSpecies(Math.random, since);
+  const pet = {
+    project, species,
+    rare: species === petlogic.RARE_INDEX,
+    colorway: petlogic.colorwayFromName(project),
+    hatchedAt: new Date().toISOString(),
+    status: 'active', primeEver: false,
+  };
+  pets.push(pet);
+  writeJson(petsPath(), pets);
+  return pet;
+}
+
+// enrich stored pets with live stage from project progress
+function decoratePet(pet, gatesByName) {
+  const g = gatesByName[pet.project];
+  let done = 0, todo = 0, docs = 0;
+  if (g) for (const ph of g.phases) { done += ph.done; todo += ph.todo; docs += ph.pages; }
+  const completion = done + todo > 0 ? (done / (done + todo)) * 100 : (docs > 0 ? 5 : 0);
+  const daysActive = Math.max(0.5, (Date.now() - new Date(pet.hatchedAt).getTime()) / 8.64e7);
+  const s = petlogic.computeStage(completion, daysActive);
+  return {
+    ...pet,
+    completion: Math.round(completion),
+    docs, done, todo,
+    daysActive: Math.round(daysActive),
+    stage: s.stage, prime: s.prime, efficient: s.efficient,
+    stageName: petlogic.STAGE_NAMES[s.stage],
+  };
+}
+
+function petsSummary() {
+  const gates = gatesSummary();
+  const byName = Object.fromEntries(gates.map((g) => [g.name, g]));
+  const pets = readJson(petsPath(), []);
+  // persist primeEver so a prime badge survives later slow-downs
+  let changed = false;
+  const out = pets.map((pet) => {
+    const d = decoratePet(pet, byName);
+    if (d.prime && !pet.primeEver) { pet.primeEver = true; changed = true; }
+    return { ...d, primeEver: pet.primeEver || d.prime };
+  });
+  if (changed) writeJson(petsPath(), pets);
+  return out;
+}
+
+function keptCount() {
+  return readJson(petsPath(), []).filter((x) => x.status === 'kept').length;
+}
+
+// Complete a project: keep the companion on display (max 3) or mint a card.
+function completeProject(project, keep) {
+  const pets = readJson(petsPath(), []);
+  const idx = pets.findIndex((x) => x.project === project);
+  if (idx < 0) return { ok: false, error: 'no companion for this project' };
+  const gates = gatesSummary();
+  const byName = Object.fromEntries(gates.map((g) => [g.name, g]));
+  const d = decoratePet(pets[idx], byName);
+
+  if (keep) {
+    if (keptCount() >= 3) return { ok: false, error: 'display full', keptFull: true };
+    pets[idx] = { ...pets[idx], status: 'kept', completedAt: new Date().toISOString(),
+      finalStage: d.stage, finalCompletion: d.completion, primeEver: pets[idx].primeEver || d.prime };
+    writeJson(petsPath(), pets);
+    return { ok: true, kept: true };
+  }
+
+  const deck = readJson(deckPath(), []);
+  deck.push({
+    id: crypto.randomUUID(), project, species: pets[idx].species, rare: pets[idx].rare,
+    colorway: pets[idx].colorway, prime: pets[idx].primeEver || d.prime,
+    finalStage: d.stage, completion: d.completion, docs: d.docs,
+    hatchedAt: pets[idx].hatchedAt, completedAt: new Date().toISOString(),
+  });
+  writeJson(deckPath(), deck);
+  pets.splice(idx, 1);
+  writeJson(petsPath(), pets);
+  return { ok: true, carded: true };
+}
+
+// free a kept-display slot by minting that pet's card
+function retireKeptPet(project) {
+  return completeProject(project, false);
+}
+
+function deckList() {
+  return readJson(deckPath(), []).sort((a, b) => String(b.completedAt).localeCompare(String(a.completedAt)));
+}
+
+// ---------- reminders ----------
+
+const remindersPath = () => p('.bludos', 'reminders.json');
+
+function listReminders() {
+  return readJson(remindersPath(), []).sort((a, b) => String(a.dueISO).localeCompare(String(b.dueISO)));
+}
+
+function addReminder(r) {
+  const list = readJson(remindersPath(), []);
+  list.push({
+    id: crypto.randomUUID(),
+    text: String(r.text || 'Reminder').slice(0, 300),
+    dueISO: r.dueISO,
+    rel: r.rel || '',
+    project: r.project || '',
+    created: new Date().toISOString(),
+    fired: false,
+    done: false,
+  });
+  writeJson(remindersPath(), list);
+  return listReminders();
+}
+
+function markReminders(ids, patch) {
+  const set = new Set(ids);
+  const list = readJson(remindersPath(), []).map((r) => (set.has(r.id) ? { ...r, ...patch } : r));
+  writeJson(remindersPath(), list);
+  return listReminders();
+}
+
+function removeReminder(id) {
+  writeJson(remindersPath(), readJson(remindersPath(), []).filter((r) => r.id !== id));
+  return listReminders();
+}
+
+function dueReminders() {
+  const now = Date.now();
+  return readJson(remindersPath(), []).filter((r) => !r.done && !r.fired && new Date(r.dueISO).getTime() <= now);
 }
 
 // ---------- wiki-links & backlinks ----------
@@ -1015,6 +1253,9 @@ module.exports = {
   mediaSave, mediaImport, mediaPick,
   saveUserTemplate, listUserTemplates,
   archiveReadB64, resolveWiki, backlinks, allPagesFlat,
+  listReminders, addReminder, markReminders, removeReminder, dueReminders,
+  activitySummary, musicList, musicImport, musicPick, musicRemove,
+  archiveAddBytes, petsSummary, completeProject, retireKeptPet, deckList,
   blueprintHtml, blueprintPdf, gatesSummary,
   listRevisions, readRevision, todayLog, verifyLogChain, contactSheet,
 };
